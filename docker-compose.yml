@@ -1,0 +1,50 @@
+services:
+  ludus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ludus:local
+    restart: unless-stopped
+    ports:
+      - "${LUDUS_BIND_ADDRESS:-127.0.0.1}:${LUDUS_PORT:-8080}:8080"
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      UMASK: "${UMASK:-002}"
+      TZ: "Europe/Berlin"
+    volumes:
+      - type: bind
+        source: ${LUDUS_CONFIG_PATH:-./data/config}
+        target: /config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LUDUS_DOWNLOADS_PATH:-./data/downloads}
+        target: /downloads
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LUDUS_ROMS_PATH:-./data/roms}
+        target: /roms
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+      - SETPCAP
+    stop_grace_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,18 @@
+**/bin/
+**/obj/
+**/node_modules/
+frontend/dist/
+src/Ludus.Api/wwwroot/
+artifacts/
+.local/
+.vs/
+.idea/
+.env
+*.user
+*.db
+*.db-shm
+*.db-wal
+TestResults/
+coverage/
+# Default local Compose bind mounts can contain ROMs, downloads and credentials.
+data/

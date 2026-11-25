@@ -1,0 +1,16 @@
+services:
+  ludus:
+    environment:
+      Ludus__DownloadDirectory: /data/downloads
+      Ludus__RomDirectory: /data/roms
+    volumes: !override
+      - type: bind
+        source: ${LUDUS_CONFIG_PATH:-./data/config}
+        target: /config
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LUDUS_DATA_PATH:-./data/media}
+        target: /data
+        bind:
+          create_host_path: false

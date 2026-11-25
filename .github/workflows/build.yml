@@ -1,0 +1,64 @@
+name: Build Ludus
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example 0.1.0'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Validate LXC installer
+        run: |
+          bash -n install-lxc.sh
+          bash tests/deployment/install-lxc-tests.sh
+          shellcheck install-lxc.sh tests/deployment/install-lxc-tests.sh
+      - name: Build, test, smoke-test and package
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $version = (Get-Content frontend/package.json -Raw | ConvertFrom-Json).version
+          if ($env:INPUT_VERSION) { $version = $env:INPUT_VERSION }
+          if ($env:REF_TYPE -eq 'tag') { $version = $env:REF_NAME -replace '^v', '' }
+          ./scripts/build-release.ps1 -Version $version
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: ludus-release-${{ github.run_number }}
+          path: artifacts/releases/*/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

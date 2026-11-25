@@ -1,0 +1,12 @@
+.git
+.local
+.env
+data
+artifacts
+**/bin
+**/obj
+**/node_modules
+frontend/dist
+src/Ludus.Api/wwwroot
+**/TestResults
+**/*.db*
