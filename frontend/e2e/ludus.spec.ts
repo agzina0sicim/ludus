@@ -54,6 +54,11 @@ test('production library, DAT scan, signed ROM download and all configuration ro
       errors.push(message.text());
   });
   await signIn(page);
+  const sidebar = page.locator('#sidebar');
+  const main = page.getByRole('main');
+  expect(await page.getByRole('banner').boundingBox()).toMatchObject({ x: 0, y: 0, height: 60 });
+  expect(await sidebar.boundingBox()).toMatchObject({ x: 0, y: 60, width: 210 });
+  expect(await main.boundingBox()).toMatchObject({ x: 210, y: 60 });
   await page.goto('/add');
   await page.getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
   await page.getByRole('button', { name: 'Manuell hinzufügen' }).click();
@@ -64,6 +69,9 @@ test('production library, DAT scan, signed ROM download and all configuration ro
   await dialog.getByRole('button', { name: 'Hinzufügen', exact: true }).click();
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   const gameId = Number(new URL(page.url()).pathname.split('/').pop());
+  await expect(
+    page.locator('#sidebar').getByRole('link', { name: 'Bibliothek', exact: true }),
+  ).toHaveAttribute('aria-current', 'location');
   await page.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Überwacht', { exact: true }).uncheck();
   await page.getByRole('dialog').getByRole('button', { name: 'Speichern' }).click();
@@ -102,11 +110,18 @@ test('production library, DAT scan, signed ROM download and all configuration ro
   expect(download.url()).not.toContain(key);
   expect(await readFile((await download.path())!)).toEqual(bytes);
   await page.screenshot({ path: info.outputPath('game-desktop.png'), fullPage: true });
-  await page.getByRole('tab', { name: 'Interaktive Suche', exact: true }).click();
+  await page.getByRole('button', { name: 'Interaktive Suche', exact: true }).click();
   await page.getByRole('button', { name: 'Releases suchen', exact: true }).click();
   await expect(page.getByText('Keine Releases gefunden', { exact: true })).toBeVisible();
-  await page.goto('/');
+  const collectionSearch = page.getByLabel('Spiele suchen', { exact: true });
+  await collectionSearch.fill(title);
+  await collectionSearch.press('Enter');
+  await expect(page).toHaveURL((url) => url.pathname === '/' && url.searchParams.get('query') === title);
+  await page.goto('/?status=available&page=2');
   await page.getByLabel('Spiele suchen', { exact: true }).fill(title);
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get('status') === 'available' && !url.searchParams.has('page'),
+  );
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('library-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Tabellen-Ansicht', exact: true }).click();
@@ -136,6 +151,129 @@ test('production library, DAT scan, signed ROM download and all configuration ro
   await page.goto('/settings/profiles');
   await page.screenshot({ path: info.outputPath('profiles-desktop.png'), fullPage: true });
   expect(errors).toEqual([]);
+});
+
+test('search results, grouped files and administration layouts at desktop and phone widths', async ({
+  page,
+  request,
+}, info) => {
+  await signIn(page);
+  const sample = {
+    title: 'Orbit',
+    provider: 'Igdb',
+    externalId: '42',
+    year: 1996,
+    developer: 'Demo Studio',
+    genres: ['Adventure'],
+    description: 'Eine Forschungsreise durch das Sonnensystem.',
+    coverRelativePath: null,
+  };
+  const created = await authorized(request, 'games', 'POST', {
+    title: title + ' Orbit',
+    platformId,
+    rootFolderId: rootId,
+    qualityProfileId: profileId,
+    monitored: true,
+  });
+  try {
+    const detail = await authorized(request, 'games/' + created.id);
+    await page.route('**/api/v1/metadata/search?*', (route) =>
+      route.fulfill({ json: [sample, { ...sample, title: 'Orbit II', externalId: '43' }] }),
+    );
+    await page.route('**/api/v1/games/' + created.id, (route) =>
+      route.fulfill({
+        json: {
+          ...detail,
+          ...sample,
+          status: 'Available',
+          releaseYear: sample.year,
+          files: ['Base', 'Update', 'Dlc'].map((contentKind, index) => ({
+            id: index + 1,
+            originalFileName: contentKind + '.rom',
+            relativePath: 'Orbit/' + contentKind + '.rom',
+            contentKind,
+            missing: false,
+            role: 'Rom',
+            score: 100,
+            verificationStatus: index ? 'Unverified' : 'VerifiedGoodDump',
+            discNumber: index ? null : 1,
+            size: 32768,
+            regions: ['Europe'],
+            languages: ['de'],
+            importedAtUtc: '2026-01-01T12:00:00Z',
+            crc32: 'B6C13F22',
+          })),
+        },
+      }),
+    );
+    await page.route('**/api/v1/activity/queue', (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: 41,
+            gameId: created.id,
+            releaseTitle: 'Orbit (Europe)',
+            status: 'Importing',
+            size: 1024,
+            downloadedBytes: 1024,
+            speedBytesPerSecond: 0,
+            etaSeconds: null,
+          },
+        ],
+      }),
+    );
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const main = page.getByRole('main');
+      await page.goto('/add');
+      await page.getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
+      await page.getByLabel('Spieltitel suchen').fill('Orbit');
+      const results = main.locator('article');
+      await expect(results).toHaveCount(2);
+      const first = (await results.first().boundingBox())!;
+      expect((await results.last().boundingBox())!.y).toBeGreaterThanOrEqual(first.y + first.height);
+      await page.screenshot({ path: info.outputPath('add-' + width + '.png'), animations: 'disabled' });
+      await results.first().getByRole('button', { name: 'Hinzufügen' }).click();
+      await expect(page.getByRole('dialog').getByLabel('Titel', { exact: true })).toHaveValue('Orbit');
+      await expect(page.getByRole('dialog').getByText(sample.description)).toBeVisible();
+      await page.getByRole('dialog').getByRole('button', { name: 'Abbrechen' }).click();
+      await page.goto('/games/' + created.id);
+      await expect(main.getByRole('heading', { name: 'Orbit', exact: true })).toBeVisible();
+      await expect(main.getByText(sample.description)).toBeVisible();
+      await expect(main.getByText('Base.rom', { exact: true })).toBeVisible();
+      await main.locator('summary').filter({ hasText: 'Updates (1)' }).click();
+      await expect(main.getByText('Update.rom', { exact: true })).toBeVisible();
+      await expect(main.getByText('Dlc.rom', { exact: true })).toBeHidden();
+      await page.screenshot({ path: info.outputPath('detail-' + width + '.png'), animations: 'disabled' });
+      await main.getByRole('button', { name: 'Metadaten', exact: true }).click();
+      const menu = await main.locator('#game-metadata').boundingBox();
+      expect(menu!.x).toBeGreaterThanOrEqual(0);
+      expect(menu!.x + menu!.width).toBeLessThanOrEqual(width + 1);
+      await main.getByRole('button', { name: 'Metadaten verknüpfen' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await main.getByRole('button', { name: 'Spielverlauf' }).click();
+      await expect(main.getByRole('heading', { name: 'Spielverlauf' })).toBeVisible();
+      await page.goto('/activity');
+      await expect(main.getByRole('progressbar')).toBeVisible();
+      await expect(main.getByRole('button', { name: 'Download entfernen' })).toBeDisabled();
+      const refresh = page.waitForResponse((response) => response.url().endsWith('/activity/queue'));
+      await main.getByRole('button', { name: 'Aktualisieren' }).click();
+      await refresh;
+      await page.screenshot({ path: info.outputPath('queue-' + width + '.png'), animations: 'disabled' });
+      await page.goto('/settings');
+      await expect(main.getByRole('link')).toHaveCount(8);
+      await page.screenshot({ path: info.outputPath('settings-' + width + '.png'), animations: 'disabled' });
+      await main.getByRole('link', { name: /Medienverwaltung/ }).click();
+      await expect(main.getByRole('heading', { name: 'Root Folders' })).toBeVisible();
+      await page.goto('/system');
+      await expect(main.getByRole('heading', { name: 'Systeminformationen' })).toBeVisible();
+      await page.screenshot({ path: info.outputPath('system-' + width + '.png'), animations: 'disabled' });
+      expect(await main.evaluate((el) => el.scrollWidth === el.clientWidth)).toBe(true);
+    }
+  } finally {
+    await authorized(request, 'games/' + created.id, 'DELETE');
+  }
 });
 
 test('backup download/import and API key rotation preserve a usable browser session', async ({
@@ -204,9 +342,14 @@ test('configuration writes and responsive English navigation', async ({ page }, 
   await expect(page.getByText('Einstellungen gespeichert.', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Instanzname', { exact: true })).toHaveValue(title);
+  await page.getByRole('button', { name: 'Benutzermenü' }).click();
   await page.getByRole('button', { name: 'Sprache: Deutsch. Zu Englisch wechseln.' }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
+  const openNavigation = page.getByRole('button', { name: 'Open navigation', exact: true });
+  await openNavigation.click();
+  await page.keyboard.press('Escape');
+  await expect(openNavigation).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Main navigation' })
@@ -262,5 +405,82 @@ test('security changes end the old session and forms login uses the updated conf
     await authorized(request, 'auth/security', 'PUT', { ...original, password: null });
     if (!original.formsAuthenticationEnabled && directory)
       await writeFile(join(directory, 'config/bootstrap-api-key'), key, { mode: 0o600 });
+  }
+});
+
+test('library empty states, filters, views and pagination on desktop and mobile', async ({
+  page,
+  request,
+}, info) => {
+  // Keep the empty-state check repeatable on a reused isolated test instance.
+  const listRoute = '**/api/v1/games?*';
+  await page.route(listRoute, (route) =>
+    route.fulfill({ json: { items: [], total: 0, page: 1, pageSize: 48 } }),
+  );
+  await signIn(page);
+  const empty = page.locator('.library-empty');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(empty.getByRole('heading', { name: 'Deine Bibliothek ist leer' })).toBeVisible();
+    await expect(empty.getByRole('link', { name: 'Spiel hinzufügen' })).toHaveAttribute('href', '/add');
+    await empty.getByRole('button', { name: 'Bibliothek scannen' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Abbrechen' }).click();
+    await expect(page.getByRole('button', { name: 'Nächste' })).toHaveCount(0);
+  }
+  await page.unroute(listRoute);
+  const prefix = `Raster ${Date.now()}`;
+  const ids: number[] = [];
+  try {
+    for (let i = 1; i <= 49; i++) {
+      const game = await authorized(request, 'games', 'POST', {
+        title: `${prefix} · ${String(i).padStart(2, '0')}`,
+        platformId,
+        rootFolderId: rootId,
+        qualityProfileId: profileId,
+        monitored: i % 2 === 1,
+      });
+      ids.push(game.id);
+    }
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/?' + new URLSearchParams({ query: prefix }));
+      const toolbar = page.getByRole('group', { name: 'Bibliotheksaktionen' });
+      const filters = page.locator('#library-filters');
+      await toolbar.getByRole('button', { name: 'Poster-Ansicht' }).click();
+      await expect(page.locator('.game-card')).toHaveCount(48);
+      expect((await toolbar.boundingBox())?.y).toBe(60);
+      await page.getByRole('button', { name: 'Nächste' }).click();
+      await expect(page.locator('.game-card')).toHaveCount(1);
+      await expect(page.locator('.game-card h2')).toHaveText(prefix + ' · 49');
+      await page.getByRole('button', { name: 'Zurück', exact: true }).click();
+      await expect(page.locator('.game-card')).toHaveCount(48);
+      await toolbar.getByRole('button', { name: 'Filter', exact: true }).click();
+      await filters.getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
+      await filters.getByLabel('Root Folder', { exact: true }).selectOption(String(rootId));
+      await filters.getByLabel('Status', { exact: true }).selectOption('unmonitored');
+      await expect(page.locator('.game-card')).toHaveCount(24);
+      await filters.getByLabel('Verifikation', { exact: true }).selectOption('VerifiedGoodDump');
+      await page.keyboard.press('Escape');
+      await expect(filters).toBeHidden();
+      await expect(empty.getByRole('heading', { name: 'Keine passenden Spiele' })).toBeVisible();
+      await empty.getByRole('button', { name: 'Filter zurücksetzen' }).click();
+      await expect(page.getByLabel('Spiele suchen')).toHaveValue('');
+      await expect(page).toHaveURL((url) => !url.search);
+      await page.getByLabel('Spiele suchen').fill(prefix);
+      await expect(page.locator('.game-card').first()).toContainText(prefix);
+      await toolbar.getByRole('button', { name: 'Tabellen-Ansicht' }).click();
+      await expect(page.locator('.library-table tbody tr')).toHaveCount(48);
+      expect(
+        (await page.locator('.library-table tbody tr').first().boundingBox())!.height,
+      ).toBeLessThanOrEqual(48);
+      expect(await page.getByRole('main').evaluate((el) => el.scrollWidth === el.clientWidth)).toBe(true);
+      await page.getByRole('button', { name: 'Nächste' }).click();
+      await expect(page.locator('.library-table tbody tr')).toHaveCount(1);
+      await page.getByRole('button', { name: 'Zurück', exact: true }).click();
+      await expect(page.locator('.library-table tbody tr')).toHaveCount(48);
+      await page.screenshot({ path: info.outputPath(`library-table-${width}.png`) });
+    }
+  } finally {
+    for (const id of ids) await authorized(request, `games/${id}`, 'DELETE');
   }
 });

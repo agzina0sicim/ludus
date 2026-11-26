@@ -219,19 +219,37 @@ prepare_storage() {
     done
 }
 
+run_build_command() {
+    local build_dir=$1
+    shift
+    runuser -u ludus-build -- env PATH="$node_dir/bin:/usr/bin:/bin" \
+        HOME="$build_dir/home" DOTNET_CLI_HOME="$build_dir/dotnet" TMPDIR="$build_dir/tmp" \
+        XDG_RUNTIME_DIR="$build_dir/runtime" XDG_CONFIG_HOME="$build_dir/home/.config" \
+        XDG_DATA_HOME="$build_dir/home/.local/share" XDG_CACHE_HOME="$build_dir/cache" \
+        NUGET_PACKAGES="$build_dir/cache/nuget" npm_config_cache="$build_dir/cache/npm" \
+        DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 "$@"
+}
+
 build_release() {
     local build_dir="$work_dir/build" invalid
-    mkdir -p "$build_dir/source" "$build_dir/cache" "$build_dir/dotnet"
+    mkdir -p "$build_dir/source" "$build_dir/cache" "$build_dir/dotnet" \
+        "$build_dir/home/.config" "$build_dir/home/.local/share" "$build_dir/tmp" "$build_dir/runtime"
     tar -C "$source_dir" --exclude=node_modules --exclude=bin --exclude=obj --exclude=dist --exclude=wwwroot --exclude='.env*' \
         -cf "$work_dir/source.tar" global.json Directory.Build.props Directory.Packages.props NuGet.Config src frontend
     tar --extract --file "$work_dir/source.tar" --directory "$build_dir/source" --no-same-owner
     chown -R -h ludus-build: "$build_dir"
+    chmod 0700 "$build_dir/home" "$build_dir/tmp" "$build_dir/runtime"
     chmod 0755 "$work_dir"
+    log 'Checking .NET initialization as ludus-build before building the frontend.'
+    if ! run_build_command "$build_dir" dotnet --version; then
+        runuser -u ludus-build -- id >&2 || true
+        stat -c '%a %U:%G %n' /tmp /dev/shm >&2 || true
+        find /tmp -maxdepth 2 -name '.dotnet*' -printf '%m %u:%g %p\n' >&2 || true
+        die '.NET initialization failed as ludus-build. Check the diagnostics above and container restrictions; no service was activated.'
+    fi
     # Expansion belongs to the unprivileged child shell, not the installer.
     # shellcheck disable=SC2016
-    runuser -u ludus-build -- env PATH="$node_dir/bin:/usr/bin:/bin" DOTNET_CLI_HOME="$build_dir/dotnet" \
-        NUGET_PACKAGES="$build_dir/cache/nuget" npm_config_cache="$build_dir/cache/npm" DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-        bash -Eeuo pipefail -c '
+    run_build_command "$build_dir" bash -Eeuo pipefail -c '
             cd "$1/source"
             npm --prefix frontend ci --no-audit --no-fund
             npm --prefix frontend run build
@@ -293,7 +311,8 @@ activate_release() {
     ln -s "$release_dir" "/opt/ludus/.current-$release_id"
     mv -Tf "/opt/ludus/.current-$release_id" /opt/ludus/current
     systemctl daemon-reload
-    systemctl reset-failed ludus.service
+    # A newly installed unit may not be loaded yet and has no failure state to reset.
+    systemctl reset-failed ludus.service 2>/dev/null || true
     systemctl enable --now ludus.service
     for ((attempt=0; attempt<90; attempt++)); do
         if systemctl is-active --quiet ludus.service && curl --fail --silent --noproxy '*' --max-time 2 "http://127.0.0.1:$port/api/v1/system/status" | grep -qx '{"status":"ok"}'; then

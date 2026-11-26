@@ -1,41 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Download, Play, RefreshCw, Trash2 } from 'lucide-react';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { api, query } from '../api';
 import { useResource } from '../hooks';
 import { bytes, date, useLabel, useLocale } from '../i18n';
-import {
-    Action,
-    Badge,
-    Button,
-    Confirm,
-    Empty,
-    ErrorBox,
-    Field,
-    Heading,
-    Loading,
-    Modal,
-    useToast,
-} from '../ui';
+import { Action, Badge, Button, Confirm, Empty, ErrorBox, Field, Loading, Modal, useToast } from '../ui';
 import type { HealthIssue, Row } from '../types';
 import { ScanDialog } from './Library';
 
 export default function SystemPage() {
     const { t } = useLocale();
     return (
-        <>
-            <Heading
-                title={t('System', 'System')}
-                subtitle={t('Ein Blick unter die Haube.', 'A look under the hood.')}
-            />
-            <nav className="tabs" aria-label={t('Systemansichten', 'System views')}>
-                <NavLink end to="/system">
-                    {t('Status & Zustand', 'Status & health')}
-                </NavLink>
-                <NavLink to="/system/tasks">{t('Aufgaben', 'Tasks')}</NavLink>
-                <NavLink to="/system/backups">Backups</NavLink>
-                <NavLink to="/system/logs">Logs</NavLink>
-            </nav>
+        <section className="admin-page compact-page">
+            <h1 className="sr-only">{t('System', 'System')}</h1>
             <Routes>
                 <Route index element={<Health />} />
                 <Route path="tasks" element={<Tasks />} />
@@ -43,7 +20,7 @@ export default function SystemPage() {
                 <Route path="logs" element={<Logs />} />
                 <Route path="*" element={<Navigate replace to="/system" />} />
             </Routes>
-        </>
+        </section>
     );
 }
 const healthMessages: Record<string, [string, string]> = {
@@ -76,7 +53,7 @@ function Health() {
     const info = useResource<Record<string, string>>('system/info');
     return (
         <>
-            <div className="section-heading">
+            <div className="view-toolbar">
                 <h2>{t('Systemzustand', 'System health')}</h2>
                 <Action
                     run={async () => {
@@ -88,7 +65,13 @@ function Health() {
                     {t('Jetzt prüfen', 'Check now')}
                 </Action>
             </div>
-            <ErrorBox error={health.error || info.error} retry={health.reload} />
+            <ErrorBox
+                error={health.error || info.error}
+                retry={() => {
+                    health.reload();
+                    info.reload();
+                }}
+            />
             {health.loading && !health.data ? (
                 <Loading />
             ) : health.data?.length === 0 ? (
@@ -96,23 +79,34 @@ function Health() {
                     {t('Keine aktiven Systemwarnungen.', 'No active health warnings.')}
                 </div>
             ) : (
-                <div className="health-list">
-                    {health.data?.map((issue) => (
-                        <article className="panel health-item" key={issue.id}>
-                            <Badge value={issue.severity} />
-                            <div>
-                                <h3>
-                                    {healthMessages[issue.code]
-                                        ? t(...healthMessages[issue.code])
-                                        : issue.message}
-                                </h3>
-                                <p className="muted">
-                                    {issue.resourceKey} · {date(issue.lastCheckedAtUtc, locale)}
-                                </p>
-                                <small className="mono">{issue.code}</small>
-                            </div>
-                        </article>
-                    ))}
+                <div className="table-wrap">
+                    <table aria-label={t('Systemmeldungen', 'Health messages')}>
+                        <thead>
+                            <tr>
+                                <th>{t('Stufe', 'Severity')}</th>
+                                <th>{t('Meldung', 'Message')}</th>
+                                <th>{t('Letzte Prüfung', 'Last checked')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {health.data?.map((issue) => (
+                                <tr key={issue.id}>
+                                    <td>
+                                        <Badge value={issue.severity} />
+                                    </td>
+                                    <td>
+                                        {healthMessages[issue.code]
+                                            ? t(...healthMessages[issue.code])
+                                            : issue.message}
+                                        <small>
+                                            {issue.resourceKey} · {issue.code}
+                                        </small>
+                                    </td>
+                                    <td>{date(issue.lastCheckedAtUtc, locale)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
             <section className="settings-section">
@@ -151,7 +145,7 @@ function Tasks() {
     const [scan, setScan] = useState(false);
     return (
         <>
-            <div className="section-heading">
+            <div className="view-toolbar">
                 <h2>{t('Geplante Aufgaben', 'Scheduled tasks')}</h2>
                 <Button onClick={() => setScan(true)}>
                     {t('Gezielter Bibliothek-Scan', 'Targeted library scan')}
@@ -282,7 +276,7 @@ function Backups() {
     const [inputKey, setInputKey] = useState(0);
     return (
         <>
-            <div className="section-heading">
+            <div className="view-toolbar">
                 <div>
                     <h2>{t('Sicherungen', 'Backups')}</h2>
                     <p className="muted">
@@ -489,7 +483,7 @@ function Logs() {
     );
     return (
         <>
-            <div className="section-heading">
+            <div className="view-toolbar">
                 <h2>{t('Protokolle', 'Logs')}</h2>
                 <div className="actions">
                     <Button onClick={data.reload}>

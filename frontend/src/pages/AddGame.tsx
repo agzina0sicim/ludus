@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, query } from '../api';
 import { useDebounce, useResource } from '../hooks';
 import { useLocale } from '../i18n';
-import { Badge, Button, Cover, Empty, ErrorBox, Field, Heading, Loading, Modal, useToast } from '../ui';
+import { Badge, Button, Cover, ErrorBox, Field, Loading, Modal, useToast } from '../ui';
 import type { Metadata, Platform, Profile, RootFolder } from '../types';
 
 export default function AddGamePage() {
@@ -39,61 +39,60 @@ export default function AddGamePage() {
     const rootId = root || String(roots.data?.[0]?.id ?? '');
     const profileId = profile || String(profiles.data?.[0]?.profile.id ?? '');
     return (
-        <>
-            <Heading
-                title={t('Spiel hinzufügen', 'Add game')}
-                subtitle={t(
-                    'Entdecke Titel und nimm sie in deine Sammlung auf.',
-                    'Find titles and make them part of your collection.',
-                )}
-            />
-            <div className="panel">
-                <div className="form-grid">
-                    <Field label={t('Plattform', 'Platform')}>
-                        <select value={platform} onChange={(event) => setPlatform(event.target.value)}>
-                            <option value="">{t('Plattform auswählen', 'Choose platform')}</option>
-                            {platforms.data?.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
-                    </Field>
-                    <Field label={t('Metadaten-Provider', 'Metadata provider')}>
-                        <select value={provider} onChange={(event) => setProvider(event.target.value)}>
-                            <option value="">
-                                {t('Plattform-Standard mit Fallback', 'Platform default with fallback')}
+        <section className="add-page">
+            <h1 className="sr-only">{t('Spiel hinzufügen', 'Add game')}</h1>
+            <div className="add-search">
+                <div className="field">
+                    <label htmlFor="game-title-search">{t('Spieltitel suchen', 'Search game titles')}</label>
+                    <div className="search-input">
+                        <Search size={19} />{' '}
+                        <input
+                            id="game-title-search"
+                            placeholder={t('Nach einem Spiel suchen …', 'Search for a game…')}
+                            maxLength={200}
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                        />
+                    </div>
+                </div>
+                <Field label={t('Plattform', 'Platform')}>
+                    <select value={platform} onChange={(event) => setPlatform(event.target.value)}>
+                        <option value="">{t('Plattform auswählen', 'Choose platform')}</option>
+                        {platforms.data?.map((item) => (
+                            <option key={item.id} value={item.id}>
+                                {item.name}
                             </option>
-                            <option value="Igdb">IGDB</option>
-                            <option value="ScreenScraper">ScreenScraper.fr</option>
-                        </select>
-                    </Field>
-                </div>
-                <div className="search-input large">
-                    <Search size={21} />
-                    <input
-                        aria-label={t('Spieltitel suchen', 'Search game titles')}
-                        placeholder={t('Nach einem Spiel suchen …', 'Search for a game…')}
-                        maxLength={200}
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                    />
-                </div>
-                <div className="inline-note">
-                    <span className="muted">
-                        {t(
-                            'Provider-Zugangsdaten werden unter Metadaten eingerichtet.',
-                            'Configure provider credentials in Metadata settings.',
-                        )}
-                    </span>
-                    <Link to="/settings/metadata">{t('Metadaten konfigurieren', 'Configure metadata')}</Link>
-                </div>
+                        ))}
+                    </select>
+                </Field>
+                <Field label={t('Metadaten-Provider', 'Metadata provider')}>
+                    <select value={provider} onChange={(event) => setProvider(event.target.value)}>
+                        <option value="">
+                            {t('Plattform-Standard mit Fallback', 'Platform default with fallback')}
+                        </option>
+                        <option value="Igdb">IGDB</option>
+                        <option value="ScreenScraper">ScreenScraper.fr</option>
+                    </select>
+                </Field>
+            </div>
+            <div className="add-actions">
+                <Button disabled={!platform} onClick={() => choose('manual')}>
+                    <Plus size={17} />
+                    {t('Manuell hinzufügen', 'Add manually')}
+                </Button>
+
+                <Link to="/settings/metadata">{t('Metadaten konfigurieren', 'Configure metadata')}</Link>
             </div>
             <ErrorBox
                 error={results.error || platforms.error || roots.error || profiles.error}
-                retry={results.reload}
+                retry={() => {
+                    results.reload();
+                    platforms.reload();
+                    roots.reload();
+                    profiles.reload();
+                }}
             />
-            {results.loading ? (
+            {results.loading || (platform && search !== term) ? (
                 <Loading />
             ) : results.data?.length ? (
                 <div className="metadata-results">
@@ -101,8 +100,13 @@ export default function AddGamePage() {
                         <article className="metadata-card" key={`${item.provider}-${item.externalId}`}>
                             <Cover path={item.coverRelativePath} title={item.title} />
                             <div>
-                                <Badge value={item.provider} />
                                 <h2>{item.title}</h2>
+                                <div className="actions">
+                                    <Badge value={item.provider} />
+                                    {item.genres.map((genre) => (
+                                        <Badge key={genre}>{genre}</Badge>
+                                    ))}
+                                </div>
                                 <p className="muted">
                                     {item.year ?? '—'} ·{' '}
                                     {item.developer ?? t('Entwickler unbekannt', 'Unknown developer')}
@@ -117,138 +121,147 @@ export default function AddGamePage() {
                     ))}
                 </div>
             ) : (
-                <Empty
-                    title={
-                        platform && term.length >= 2
-                            ? t('Keine Treffer', 'No results')
-                            : t('Dein nächster Klassiker wartet.', 'Your next classic awaits.')
-                    }
-                    text={t(
-                        'Wähle eine Plattform und suche nach mindestens zwei Zeichen. Du kannst einen Titel auch manuell erfassen.',
-                        'Choose a platform and enter at least two characters. You can also add a title manually.',
-                    )}
-                />
+                !results.error && (
+                    <p className="compact-empty">
+                        {platform && term.trim().length >= 2
+                            ? t('Keine passenden Spiele gefunden.', 'No matching games found.')
+                            : t(
+                                  'Wähle eine Plattform und gib mindestens zwei Zeichen ein.',
+                                  'Choose a platform and enter at least two characters.',
+                              )}
+                    </p>
+                )
             )}
-            <div className="section-footer">
-                <Button disabled={!platform} onClick={() => choose('manual')}>
-                    <Plus size={17} />
-                    {t('Manuell hinzufügen', 'Add manually')}
-                </Button>
-            </div>
             {selected && (
                 <Modal
                     title={t('Zur Bibliothek hinzufügen', 'Add to library')}
                     onClose={() => setSelected(undefined)}
                     busy={busy}
+                    wide={selected !== 'manual'}
                 >
-                    <form
-                        onSubmit={async (event) => {
-                            event.preventDefault();
-                            setBusy(true);
-                            setError(undefined);
-                            try {
-                                const game = await api<{ id: number }>('games', {
-                                    method: 'POST',
-                                    body: {
-                                        title,
-                                        platformId: Number(platform),
-                                        rootFolderId: Number(rootId),
-                                        qualityProfileId: Number(profileId),
-                                        monitored,
-                                        ...(selected === 'manual'
-                                            ? {}
-                                            : {
-                                                  provider: selected.provider,
-                                                  externalId: selected.externalId,
-                                              }),
-                                        baseTitleId: baseTitleId || null,
-                                    },
-                                });
-                                toast(t('Spiel hinzugefügt.', 'Game added.'));
-                                navigate(`/games/${game.id}`);
-                            } catch (err) {
-                                setError(err);
-                            } finally {
-                                setBusy(false);
-                            }
-                        }}
-                    >
-                        <Field label={t('Titel', 'Title')}>
-                            <input
-                                value={title}
-                                required
-                                maxLength={512}
-                                onChange={(event) => setTitle(event.target.value)}
-                            />
-                        </Field>
-                        <Field label="Root Folder">
-                            <select value={rootId} required onChange={(event) => setRoot(event.target.value)}>
-                                <option value="" disabled>
-                                    {t('Root Folder auswählen', 'Choose root folder')}
-                                </option>
-                                {roots.data?.map((item) => (
-                                    <option key={item.id} value={item.id}>
-                                        {item.name} — {item.path}
-                                    </option>
-                                ))}
-                            </select>
-                        </Field>
-                        {roots.data?.length === 0 && (
-                            <Link to="/settings/media">
-                                {t('Zuerst einen Root Folder anlegen', 'Create a root folder first')}
-                            </Link>
+                    <div className={selected === 'manual' ? undefined : 'add-confirmation'}>
+                        {selected !== 'manual' && (
+                            <div>
+                                <Cover path={selected.coverRelativePath} title={selected.title} />
+                                <p className="muted">{selected.description}</p>
+                            </div>
                         )}
-                        <Field label={t('Qualitätsprofil', 'Quality profile')}>
-                            <select
-                                required
-                                value={profileId}
-                                onChange={(event) => setProfile(event.target.value)}
-                            >
-                                <option value="" disabled>
-                                    {t('Profil auswählen', 'Choose profile')}
-                                </option>
-                                {profiles.data?.map((item) => (
-                                    <option key={item.profile.id} value={item.profile.id}>
-                                        {item.profile.name} · Cutoff {item.profile.upgradeUntilScore}
-                                    </option>
-                                ))}
-                            </select>
-                        </Field>
-                        <Field
-                            label={t('Switch Base Title-ID (optional)', 'Switch base title ID (optional)')}
+                        <form
+                            onSubmit={async (event) => {
+                                event.preventDefault();
+                                setBusy(true);
+                                setError(undefined);
+                                try {
+                                    const game = await api<{ id: number }>('games', {
+                                        method: 'POST',
+                                        body: {
+                                            title,
+                                            platformId: Number(platform),
+                                            rootFolderId: Number(rootId),
+                                            qualityProfileId: Number(profileId),
+                                            monitored,
+                                            ...(selected === 'manual'
+                                                ? {}
+                                                : {
+                                                      provider: selected.provider,
+                                                      externalId: selected.externalId,
+                                                  }),
+                                            baseTitleId: baseTitleId || null,
+                                        },
+                                    });
+                                    toast(t('Spiel hinzugefügt.', 'Game added.'));
+                                    navigate(`/games/${game.id}`);
+                                } catch (err) {
+                                    setError(err);
+                                } finally {
+                                    setBusy(false);
+                                }
+                            }}
                         >
-                            <input
-                                value={baseTitleId}
-                                pattern="[0-9a-fA-F]{13}000"
-                                maxLength={16}
-                                onChange={(event) => setBaseTitleId(event.target.value)}
-                            />
-                        </Field>
-                        <label className="check">
-                            <input
-                                type="checkbox"
-                                checked={monitored}
-                                onChange={(event) => setMonitored(event.target.checked)}
-                            />
-                            {t('Spiel überwachen', 'Monitor game')}
-                        </label>
-                        <ErrorBox error={error} />
-                        <div className="dialog-actions">
-                            <Button disabled={busy} onClick={() => setSelected(undefined)}>
-                                {t('Abbrechen', 'Cancel')}
-                            </Button>
-                            <Button
-                                type="submit"
-                                variant="primary"
-                                busy={busy}
-                                disabled={!rootId || !profileId}
+                            <Field label={t('Titel', 'Title')}>
+                                <input
+                                    value={title}
+                                    required
+                                    maxLength={512}
+                                    onChange={(event) => setTitle(event.target.value)}
+                                />
+                            </Field>
+                            <Field label="Root Folder">
+                                <select
+                                    value={rootId}
+                                    required
+                                    onChange={(event) => setRoot(event.target.value)}
+                                >
+                                    <option value="" disabled>
+                                        {t('Root Folder auswählen', 'Choose root folder')}
+                                    </option>
+                                    {roots.data?.map((item) => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.name} — {item.path}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                            {roots.data?.length === 0 && (
+                                <Link to="/settings/media">
+                                    {t('Zuerst einen Root Folder anlegen', 'Create a root folder first')}
+                                </Link>
+                            )}
+                            <Field label={t('Qualitätsprofil', 'Quality profile')}>
+                                <select
+                                    required
+                                    value={profileId}
+                                    onChange={(event) => setProfile(event.target.value)}
+                                >
+                                    <option value="" disabled>
+                                        {t('Profil auswählen', 'Choose profile')}
+                                    </option>
+                                    {profiles.data?.map((item) => (
+                                        <option key={item.profile.id} value={item.profile.id}>
+                                            {item.profile.name} · Cutoff {item.profile.upgradeUntilScore}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                            <Field
+                                label={t(
+                                    'Switch Base Title-ID (optional)',
+                                    'Switch base title ID (optional)',
+                                )}
                             >
-                                {t('Hinzufügen', 'Add game')}
-                            </Button>
-                        </div>
-                    </form>
+                                <input
+                                    value={baseTitleId}
+                                    pattern="[0-9a-fA-F]{13}000"
+                                    maxLength={16}
+                                    onChange={(event) => setBaseTitleId(event.target.value)}
+                                />
+                            </Field>
+                            <label className="check">
+                                <input
+                                    type="checkbox"
+                                    checked={monitored}
+                                    onChange={(event) => setMonitored(event.target.checked)}
+                                />
+                                {t('Spiel überwachen', 'Monitor game')}
+                            </label>
+                            <ErrorBox error={error} />
+                            <div className="dialog-actions">
+                                <Button disabled={busy} onClick={() => setSelected(undefined)}>
+                                    {t('Abbrechen', 'Cancel')}
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    variant="primary"
+                                    busy={busy}
+                                    disabled={!rootId || !profileId}
+                                >
+                                    {t('Hinzufügen', 'Add game')}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
                 </Modal>
             )}
-        </>
+        </section>
     );
 }

@@ -149,6 +149,8 @@ Das Skript muss als root **im Ziel-LXC**, nicht auf dem Proxmox-Host, laufen. Es
 
 Der Build läuft als separater Benutzer `ludus-build` mit eigenen temporären Caches. Der Dienst läuft als `ludus`. Falls UID `1000` bereits zu einem anderen Benutzer gehört, eine freie `--uid` wählen und die Medienrechte dazu passend vorbereiten. Ein bestehender GID kann für die gemeinsame Mediengruppe verwendet werden; vorhandene Konten werden nicht umnummeriert.
 
+Der Build-Benutzer erhält pro Installation ein beschreibbares Home-Verzeichnis sowie eigene XDG- und temporäre Verzeichnisse. Vor dem Frontend-Build prüft der Installer mit `dotnet --version` die SDK-Initialisierung unter diesem Benutzer. Ein Fehler bei `NuGet-Migrations` betrifft die .NET-/NuGet-Initialisierung, nicht die Ludus-Datenbankmigrationen. Die .NET-10-Runtime verwendet unter Linux für benannte Mutexe weiterhin `/tmp`; ein eigenes `TMPDIR` allein behebt dortige Rechte- oder Containerprobleme nicht. [Runtime-Quellcode](https://github.com/dotnet/runtime/blob/v10.0.15/src/coreclr/pal/src/init/pal.cpp#L1116)
+
 Ohne `--media-dir` sind `/downloads` und `/roms` die Standardpfade. `--config-dir`, `--downloads-dir`, `--roms-dir`, `--port` und `--bind` sind ebenfalls verfügbar; `bash install-lxc.sh --help` zeigt alle Optionen. Installationspfade müssen kanonisch sein und dürfen weder Leerzeichen noch Symlink-Komponenten enthalten.
 
 ### 3. Dienst und Verzeichnisse

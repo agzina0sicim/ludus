@@ -1,9 +1,10 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Activity, Gamepad2, Library, LogOut, Menu, Plus, Settings, ShieldCheck, X } from 'lucide-react';
-import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Gamepad2, ShieldCheck, X } from 'lucide-react';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, login, resetCsrf } from './api';
 import { useResource } from './hooks';
 import { useLocale } from './i18n';
+import { ShellHeader, SidebarNavigation } from './ShellNavigation';
 import { useRealtime } from './realtime';
 import { Button, ErrorBox, Field, Loading } from './ui';
 import type { HealthIssue, Session } from './types';
@@ -233,6 +234,8 @@ function Shell({ logout }: { logout: () => void }) {
     const settings = useResource<{ language: 'de' | 'en'; instanceName: string }>('settings');
     const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 760px)').matches);
     const sidebar = useRef<HTMLElement>(null);
+    const main = useRef<HTMLElement>(null);
+    const opener = useRef<HTMLElement | null>(null);
     const live = useRealtime();
     useEffect(() => {
         if (settings.data) {
@@ -251,7 +254,7 @@ function Shell({ logout }: { logout: () => void }) {
     }, []);
     useEffect(() => {
         if (!mobile || !menu) return;
-        const previous = document.activeElement as HTMLElement | null;
+        const previous = opener.current;
         const overflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         sidebar.current?.querySelector<HTMLButtonElement>('button')?.focus();
@@ -282,32 +285,32 @@ function Shell({ logout }: { logout: () => void }) {
     }, [mobile, menu]);
     useEffect(() => {
         setMenu(false);
-        window.scrollTo(0, 0);
+        if (main.current) main.current.scrollTop = 0;
     }, [location.pathname]);
-    const navigation = [
-        ['/', Library, t('Bibliothek', 'Library')],
-        ['/add', Plus, t('Spiel hinzufügen', 'Add game')],
-        ['/activity', Activity, t('Aktivität', 'Activity')],
-        ['/settings', Settings, t('Einstellungen', 'Settings')],
-        ['/system', ShieldCheck, t('System', 'System')],
-    ] as const;
     return (
         <div className="app-shell">
             <a className="skip-link" href="#main">
                 {t('Zum Inhalt', 'Skip to content')}
             </a>
-            <div className="mobile-top">
-                <Brand />
-                <Button
-                    aria-label={t('Navigation öffnen', 'Open navigation')}
-                    aria-expanded={menu}
-                    aria-controls="sidebar"
-                    className="icon-button"
-                    onClick={() => setMenu(true)}
-                >
-                    <Menu />
-                </Button>
-            </div>
+            <ShellHeader
+                brand={<Brand />}
+                languageSwitch={<LanguageSwitch />}
+                connected={live.state === 'connected'}
+                menuOpen={mobile && menu}
+                openMenu={() => {
+                    opener.current = document.activeElement as HTMLElement;
+                    setMenu(true);
+                }}
+                signOut={async () => {
+                    try {
+                        await api('auth/logout', { method: 'POST' });
+                        resetCsrf();
+                        logout();
+                    } catch (error) {
+                        setLogoutError(error);
+                    }
+                }}
+            />
             {menu && (
                 <button
                     className="nav-shade"
@@ -326,56 +329,16 @@ function Shell({ logout }: { logout: () => void }) {
                 aria-modal={mobile && menu ? true : undefined}
                 aria-label={mobile ? t('Navigation', 'Navigation') : undefined}
             >
-                <div className="sidebar-brand">
-                    <Brand />
-                    <Button
-                        className="mobile-close icon-button"
-                        aria-label={t('Navigation schließen', 'Close navigation')}
-                        onClick={() => setMenu(false)}
-                    >
-                        <X />
-                    </Button>
-                </div>
-                <p className="sidebar-caption">{t('DEINE SAMMLUNG', 'YOUR COLLECTION')}</p>
-                <nav aria-label={t('Hauptnavigation', 'Main navigation')}>
-                    {navigation.map(([path, Icon, label]) => (
-                        <NavLink key={path} to={path} end={path === '/'} onClick={() => setMenu(false)}>
-                            <Icon size={20} />
-                            <span>{label}</span>
-                            {path === '/system' && !!health.data?.length && (
-                                <span className="health-count">{health.data.length}</span>
-                            )}
-                        </NavLink>
-                    ))}
-                </nav>
-                <div className="sidebar-bottom">
-                    <div className="live-state">
-                        <span className={`live-dot ${live.state}`} />
-                        {live.state === 'connected'
-                            ? t('Live verbunden', 'Live connected')
-                            : t('Verbindung wird aufgebaut', 'Connecting')}
-                    </div>
-                    <div className="sidebar-footer">
-                        <LanguageSwitch />
-                        <Button
-                            className="icon-button"
-                            aria-label={t('Abmelden', 'Sign out')}
-                            onClick={async () => {
-                                try {
-                                    await api('auth/logout', { method: 'POST' });
-                                    resetCsrf();
-                                    logout();
-                                } catch (error) {
-                                    setLogoutError(error);
-                                }
-                            }}
-                        >
-                            <LogOut size={19} />
-                        </Button>
-                    </div>
-                </div>
+                <Button
+                    className="mobile-close icon-button"
+                    aria-label={t('Navigation schließen', 'Close navigation')}
+                    onClick={() => setMenu(false)}
+                >
+                    <X />
+                </Button>
+                <SidebarNavigation healthCount={health.data?.length ?? 0} closeMenu={() => setMenu(false)} />
             </aside>
-            <main id="main" className="main-content" inert={mobile && menu}>
+            <main ref={main} tabIndex={-1} id="main" className="main-content" inert={mobile && menu}>
                 <ErrorBox error={logoutError} />
                 {live.event && ['scanUpdated', 'importStatus', 'rssUpdated'].includes(live.event.name) && (
                     <div className="live-notice" role="status">

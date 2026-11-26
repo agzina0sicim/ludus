@@ -21,6 +21,7 @@ mock_activation_host() {
     systemctl() {
         printf 'systemctl %s\n' "$*" >> "$work_dir/commands"
         if [[ $scenario == enable-failure && $1 == enable ]]; then return 23; fi
+        if [[ $scenario == reset-not-loaded && $1 == reset-failed ]]; then return 1; fi
         return 0
     }
     systemd-analyze() {
@@ -64,6 +65,29 @@ run_case() {
         id) validate_id UID "$1" ;;
         path) validate_storage_path "$1" ;;
         overlap) paths_overlap "$1" "$2" ;;
+        build-environment)
+            node_dir=/opt/ludus/tools/node-test
+            local command_log="$1/build-environment"
+            runuser() { printf '%s\n' "$@" > "$command_log"; }
+            run_build_command "$1/build" dotnet --version
+            assert_line 'ludus-build' "$command_log"
+            assert_line "HOME=$1/build/home" "$command_log"
+            assert_line "DOTNET_CLI_HOME=$1/build/dotnet" "$command_log"
+            assert_line "TMPDIR=$1/build/tmp" "$command_log"
+            assert_line "XDG_RUNTIME_DIR=$1/build/runtime" "$command_log"
+            assert_line "XDG_CONFIG_HOME=$1/build/home/.config" "$command_log"
+            assert_line "XDG_DATA_HOME=$1/build/home/.local/share" "$command_log"
+            assert_line "XDG_CACHE_HOME=$1/build/cache" "$command_log"
+            assert_line "NUGET_PACKAGES=$1/build/cache/nuget" "$command_log"
+            assert_line "npm_config_cache=$1/build/cache/npm" "$command_log"
+            assert_line 'dotnet' "$command_log"
+            assert_line '--version' "$command_log"
+            ;;
+        build-command-failure)
+            node_dir=/opt/ludus/tools/node-test
+            runuser() { return 17; }
+            run_build_command "$1/build" dotnet --version
+            ;;
         options)
             case "$1" in
                 port) port=$2 ;; bind) bind_address=$2 ;; node) node_version=$2 ;;
@@ -165,6 +189,8 @@ expect success 'accept common media root' --case options media /data
 expect failure 'reject directories outside media root' --case options outside-media ''
 expect failure 'reject config inside media root' --case options media-config ''
 expect success 'render hardened service and shared media mount' --case render "$test_root"
+expect success 'give the build account private home, XDG and temp paths' --case build-environment "$test_root"
+expect failure 'propagate failure from the build account command' --case build-command-failure "$test_root"
 expect success 'round-trip installer state' --case state roundtrip "$test_root"
 expect failure 'reject untrusted state owner' --case state owner "$test_root"
 expect failure 'reject world-readable state' --case state mode "$test_root"
@@ -172,10 +198,10 @@ expect failure 'reject unknown state fields' --case state unknown "$test_root"
 expect failure 'reject shell syntax in state without executing it' --case state injection "$test_root"
 [[ ! -e $test_root/sentinel ]] || die 'Unsafe state execution.'
 
-for scenario in healthy unhealthy occupied-port enable-failure verify-failure; do
+for scenario in healthy unhealthy occupied-port enable-failure verify-failure reset-not-loaded; do
     mkdir "$test_root/$scenario"
     outcome=failure
-    [[ $scenario != healthy ]] || outcome=success
+    if [[ $scenario == healthy || $scenario == reset-not-loaded ]]; then outcome=success; fi
     expect "$outcome" "activation: $scenario" --scenario "$scenario" "$test_root/$scenario"
 done
 assert_line 'systemctl stop ludus.service' "$test_root/unhealthy/commands"

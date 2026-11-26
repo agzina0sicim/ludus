@@ -1,39 +1,42 @@
 import { useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import { useResource } from '../hooks';
 import { bytes, date, useLocale } from '../i18n';
-import { Badge, Button, Confirm, Empty, ErrorBox, Heading, Loading, Pager } from '../ui';
+import { Badge, Button, Confirm, ErrorBox, Loading, Pager } from '../ui';
 import type { History, Page, QueueItem, Row } from '../types';
 
 export default function ActivityPage() {
-    const { t } = useLocale();
     return (
-        <>
-            <Heading
-                title={t('Aktivität', 'Activity')}
-                subtitle={t(
-                    'Downloads, Importe und die Geschichte deiner Sammlung.',
-                    'Downloads, imports, and the history of your collection.',
-                )}
-            />
-            <nav className="tabs" aria-label={t('Aktivitätsansichten', 'Activity views')}>
-                <NavLink end to="/activity">
-                    {t('Warteschlange', 'Queue')}
-                </NavLink>
-                <NavLink to="/activity/history">{t('Verlauf', 'History')}</NavLink>
-                <NavLink to="/activity/blocklist">
-                    {t('Blocklist & Cooldowns', 'Blocklist & cooldowns')}
-                </NavLink>
-            </nav>
+        <section className="admin-page compact-page">
             <Routes>
                 <Route index element={<Queue />} />
                 <Route path="history" element={<HistoryTable />} />
                 <Route path="blocklist" element={<Blocklist />} />
                 <Route path="*" element={<Navigate replace to="/activity" />} />
             </Routes>
-        </>
+        </section>
+    );
+}
+function ListToolbar({
+    title,
+    reload,
+    embedded = false,
+}: {
+    title: string;
+    reload: () => void;
+    embedded?: boolean;
+}) {
+    const { t } = useLocale();
+    return (
+        <header className={embedded ? 'section-heading' : 'view-toolbar'}>
+            {embedded ? <h3>{title}</h3> : <h1>{title}</h1>}
+            <Button onClick={reload}>
+                <RefreshCw size={16} />
+                {t('Aktualisieren', 'Refresh')}
+            </Button>
+        </header>
     );
 }
 function Queue() {
@@ -42,17 +45,12 @@ function Queue() {
     const [remove, setRemove] = useState<QueueItem>();
     return (
         <>
+            <ListToolbar title={t('Warteschlange', 'Queue')} reload={data.reload} />
             <ErrorBox error={data.error} retry={data.reload} />
             {!data.data && data.loading ? (
                 <Loading />
             ) : data.data?.length === 0 ? (
-                <Empty
-                    title={t('Alles im grünen Bereich.', 'All caught up.')}
-                    text={t(
-                        'Hier erscheinen Downloads aus der Kategorie ludus mit Live-Fortschritt.',
-                        'Downloads in the ludus category appear here with live progress.',
-                    )}
-                />
+                <p className="compact-empty">{t('Die Warteschlange ist leer.', 'The queue is empty.')}</p>
             ) : (
                 <div className="table-wrap">
                     <table>
@@ -138,17 +136,16 @@ export function HistoryTable({ gameId }: { gameId?: number }) {
     );
     return (
         <>
+            <ListToolbar
+                title={gameId ? t('Ereignisse', 'Events') : t('Verlauf', 'History')}
+                reload={data.reload}
+                embedded={!!gameId}
+            />
             <ErrorBox error={data.error} retry={data.reload} />
             {data.loading && !data.data ? (
                 <Loading />
             ) : data.data?.items.length === 0 ? (
-                <Empty
-                    title={t('Noch kein Verlauf', 'No history yet')}
-                    text={t(
-                        'Downloads, Verifikationen und Importe erscheinen hier.',
-                        'Downloads, verifications, and imports will appear here.',
-                    )}
-                />
+                <p className="compact-empty">{t('Noch kein Verlauf', 'No history yet')}</p>
             ) : (
                 <div className="table-wrap">
                     <table>
@@ -188,7 +185,9 @@ export function HistoryTable({ gameId }: { gameId?: number }) {
                     </table>
                 </div>
             )}
-            {data.data && <Pager page={page} total={data.data.total} pageSize={50} onChange={setPage} />}
+            {data.data && (data.data.total > 0 || page > 1) && (
+                <Pager page={page} total={data.data.total} pageSize={50} onChange={setPage} />
+            )}
         </>
     );
 }
@@ -198,17 +197,12 @@ function Blocklist() {
     const [remove, setRemove] = useState<Row>();
     return (
         <>
+            <ListToolbar title={t('Blocklist & Cooldowns', 'Blocklist & cooldowns')} reload={data.reload} />
             <ErrorBox error={data.error} retry={data.reload} />
             {!data.data && data.loading ? (
                 <Loading />
             ) : data.data?.length === 0 ? (
-                <Empty
-                    title={t('Keine gesperrten Releases', 'No blocked releases')}
-                    text={t(
-                        'Temporäre Fehler erhalten einen Cooldown. Defekte Dateien werden dauerhaft blockiert.',
-                        'Temporary failures receive a cooldown. Corrupt files are permanently blocked.',
-                    )}
-                />
+                <p className="compact-empty">{t('Keine gesperrten Releases', 'No blocked releases')}</p>
             ) : (
                 <div className="table-wrap">
                     <table>

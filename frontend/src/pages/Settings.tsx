@@ -1,56 +1,24 @@
 import { useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { api, login, resetCsrf } from '../api';
 import { useResource } from '../hooks';
 import { date, useLabel, useLocale } from '../i18n';
 import { CrudSection, Editor, Fields, payload, type FormField, type Values } from '../forms';
 import * as schema from '../settings-schema';
-import {
-    Action,
-    Badge,
-    Button,
-    Confirm,
-    Empty,
-    ErrorBox,
-    Field,
-    Heading,
-    Loading,
-    Modal,
-    useToast,
-} from '../ui';
+import { useSettingsSections } from '../settings-sections';
+import { Action, Badge, Button, Confirm, Empty, ErrorBox, Field, Loading, Modal, useToast } from '../ui';
 import type { Platform, Profile, Row } from '../types';
 
 export default function SettingsPage() {
     const { t } = useLocale();
-    const tabs = [
-        ['media', t('Medienverwaltung', 'Media management')],
-        ['dat', 'DAT Files'],
-        ['profiles', t('Profile & Formate', 'Profiles & formats')],
-        ['indexers', t('Indexer', 'Indexers')],
-        ['clients', t('Download-Clients', 'Download clients')],
-        ['metadata', t('Metadaten', 'Metadata')],
-        ['connect', 'Connect'],
-        ['general', t('Allgemein & Sicherheit', 'General & security')],
-    ];
     return (
-        <>
-            <Heading
-                title={t('Einstellungen', 'Settings')}
-                subtitle={t('Deine Sammlung, nach deinen Regeln.', 'Your collection, your rules.')}
-            />
-            <nav
-                className="tabs settings-tabs"
-                aria-label={t('Konfigurationsbereiche', 'Configuration sections')}
-            >
-                {tabs.map(([path, name]) => (
-                    <NavLink to={`/settings/${path}`} key={path}>
-                        {name}
-                    </NavLink>
-                ))}
-            </nav>
+        <section className="admin-page compact-page">
+            <header className="view-toolbar">
+                <h1>{t('Einstellungen', 'Settings')}</h1>
+            </header>
             <Routes>
-                <Route index element={<Navigate replace to="media" />} />
+                <Route index element={<SettingsDirectory />} />
                 <Route path="media" element={<MediaSettings />} />
                 <Route path="dat" element={<DatSettings />} />
                 <Route path="profiles" element={<ProfileSettings />} />
@@ -61,7 +29,20 @@ export default function SettingsPage() {
                 <Route path="general" element={<GeneralSettings />} />
                 <Route path="*" element={<Navigate replace to="/settings/media" />} />
             </Routes>
-        </>
+        </section>
+    );
+}
+function SettingsDirectory() {
+    const sections = useSettingsSections();
+    return (
+        <div className="settings-directory">
+            {sections.map(([slug, name, description]) => (
+                <Link key={slug} to={slug}>
+                    <h2>{name}</h2>
+                    <p>{description}</p>
+                </Link>
+            ))}
+        </div>
     );
 }
 function MediaSettings() {
