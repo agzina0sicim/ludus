@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Identity;
 
 namespace Ludus.Infrastructure.Tests;
 
@@ -22,7 +23,7 @@ public sealed class DatabaseTests
         await using var scope = fixture.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        Assert.Equal(3, (await database.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(4, (await database.Database.GetAppliedMigrationsAsync()).Count());
         Assert.Empty(await database.Database.GetPendingMigrationsAsync());
         Assert.False(database.Database.HasPendingModelChanges());
         Assert.Equal(22, await database.Platforms.CountAsync());
@@ -44,11 +45,12 @@ public sealed class DatabaseTests
     }
 
     [Fact]
-    public async Task RestartPreservesApiKeyAndUserConfiguration()
+    public async Task RestartPreservesApiKeyUsernamePasswordHashAndUserConfiguration()
     {
         await using var fixture = new TestDatabase();
         await fixture.InitializeAsync();
         string apiKey;
+        string passwordHash;
         await using (var scope = fixture.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -56,7 +58,12 @@ public sealed class DatabaseTests
             settings.Language = "en";
             var profile = await database.QualityProfiles.SingleAsync();
             profile.UpgradeUntilScore = 250;
-            apiKey = fixture.Secrets.Unprotect((await database.SecuritySettings.SingleAsync()).ApiKey);
+            var security = await database.SecuritySettings.SingleAsync();
+            apiKey = fixture.Secrets.Unprotect(security.ApiKey);
+            security.Username = "existing-administrator";
+            security.PasswordHash = new PasswordHasher<string>().HashPassword(security.Username, "existing password remains unchanged");
+            security.AccountSetupMode = AccountSetupMode.Complete;
+            passwordHash = security.PasswordHash;
             Assert.Equal(64, apiKey.Length);
             await database.SaveChangesAsync();
         }
@@ -66,7 +73,10 @@ public sealed class DatabaseTests
         var reopened = secondScope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Equal("en", (await reopened.AppSettings.SingleAsync()).Language);
         Assert.Equal(250, (await reopened.QualityProfiles.SingleAsync()).UpgradeUntilScore);
-        Assert.Equal(apiKey, fixture.Secrets.Unprotect((await reopened.SecuritySettings.SingleAsync()).ApiKey));
+        var reopenedSecurity = await reopened.SecuritySettings.SingleAsync();
+        Assert.Equal(apiKey, fixture.Secrets.Unprotect(reopenedSecurity.ApiKey));
+        Assert.Equal("existing-administrator", reopenedSecurity.Username);
+        Assert.Equal(passwordHash, reopenedSecurity.PasswordHash);
         Assert.Equal(22, await reopened.Platforms.CountAsync());
     }
 
@@ -247,6 +257,60 @@ public sealed class DatabaseTests
     }
 
     [Fact]
+    public async Task AccountTokenRemovalMigrationPreservesExistingAccountCredentials()
+    {
+        await using var fixture = new TestDatabase();
+        await fixture.InitializeAsync();
+        await using var scope = fixture.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var security = await database.SecuritySettings.SingleAsync();
+        security.Username = "preserved-administrator";
+        security.PasswordHash = new PasswordHasher<string>().HashPassword(security.Username, "preserved password hash 2026");
+        security.AccountSetupMode = AccountSetupMode.Complete;
+        await database.SaveChangesAsync();
+        var originalHash = security.PasswordHash;
+        var originalApiKey = security.ApiKey.Ciphertext;
+
+        var migrator = database.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261127142041_LudusSettingsExpansion");
+        await database.Database.ExecuteSqlRawAsync("UPDATE SecuritySettings SET SetupTokenHash = 'obsolete-token-hash'");
+        await migrator.MigrateAsync();
+        database.ChangeTracker.Clear();
+
+        security = await database.SecuritySettings.AsNoTracking().SingleAsync();
+        Assert.Equal("preserved-administrator", security.Username);
+        Assert.Equal(originalHash, security.PasswordHash);
+        Assert.Equal(originalApiKey, security.ApiKey.Ciphertext);
+        Assert.DoesNotContain("SetupTokenHash", await SecuritySettingsColumnNamesAsync(database));
+    }
+
+    [Fact]
+    public async Task AccountTokenRemovalMigrationKeepsApiKeyOnlyInstallationLocked()
+    {
+        await using var fixture = new TestDatabase();
+        await fixture.InitializeAsync();
+        await using var scope = fixture.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var security = await database.SecuritySettings.SingleAsync();
+        security.AccountSetupMode = AccountSetupMode.LegacyProtected;
+        var originalApiKey = security.ApiKey.Ciphertext;
+        await database.SaveChangesAsync();
+
+        var migrator = database.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261127142041_LudusSettingsExpansion");
+        await database.Database.ExecuteSqlRawAsync("UPDATE SecuritySettings SET SetupTokenHash = 'obsolete-token-hash'");
+        await migrator.MigrateAsync();
+        database.ChangeTracker.Clear();
+
+        security = await database.SecuritySettings.AsNoTracking().SingleAsync();
+        Assert.Equal(AccountSetupMode.LegacyProtected, security.AccountSetupMode);
+        Assert.Null(security.Username);
+        Assert.Null(security.PasswordHash);
+        Assert.Equal(originalApiKey, security.ApiKey.Ciphertext);
+        Assert.DoesNotContain("SetupTokenHash", await SecuritySettingsColumnNamesAsync(database));
+    }
+
+    [Fact]
     public async Task LegacyGlobalProfilesAreClonedPerUsedPlatformWithoutLosingScores()
     {
         await using var fixture = new TestDatabase();
@@ -336,5 +400,16 @@ public sealed class DatabaseTests
         database.Games.Add(game);
         await database.SaveChangesAsync();
         return game;
+    }
+
+    private static async Task<IReadOnlyList<string>> SecuritySettingsColumnNamesAsync(AppDbContext database)
+    {
+        await database.Database.OpenConnectionAsync();
+        await using var command = database.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "PRAGMA table_info(\"SecuritySettings\");";
+        var names = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) names.Add(reader.GetString(1));
+        return names;
     }
 }

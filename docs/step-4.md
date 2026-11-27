@@ -13,8 +13,8 @@ in der minimalen Form `{"status":"ok"}`. Die weiteren anonymen Routen sind
 Token geschützte Medienabruf. Unbekannte API-Routen fallen nicht auf die SPA zurück.
 
 Eine neue Instanz beginnt im Setup-Modus. `POST auth/setup` legt genau einmal
-Benutzername, ASP.NET-Identity-Passworthash und die Methode `Forms` oder `Basic`
-fest. `Forms` ist der Standard und verwendet das HttpOnly-Session-Cookie; `Basic`
+Benutzername und ASP.NET-Identity-Passworthash fest und verwendet immer `Forms`.
+`Forms` verwendet das HttpOnly-Session-Cookie; `Basic` kann anschließend in den Sicherheitseinstellungen aktiviert werden und
 antwortet bei fehlenden Zugangsdaten mit `WWW-Authenticate: Basic` und verwendet
 dieselben Zugangsdaten. Im Forms-Modus wird diese Challenge bewusst nicht gesendet.
 
@@ -23,12 +23,13 @@ Dashboards und Integrationen verwenden `X-Api-Key`. Ein ausdrücklich übermitte
 Key kann nicht durch ein zusätzliches gültiges Cookie ersetzt werden. API-Keys
 werden nicht aus Query-Strings gelesen und sind keine Browser-Anmeldemethode.
 
-Eine migrierte Instanz ohne Benutzerkonto beginnt in `LegacyProtected`. Beim Start
-wird lokal `/config/account-setup-token` mit Modus `0600` unter Unix erzeugt; das
-Setup akzeptiert nur dessen SHA256-verifizierten Einmalcode. Vorhandene Benutzernamen
-und Hashes wechseln direkt nach `Complete`. Für eine lokale Wiederherstellung wird
-bei gestopptem oder laufendem Dienst der Marker `/config/reset-account` angelegt und
-Ludus neu gestartet; der Marker wird verbraucht und ein neuer Einmalcode erzeugt.
+Eine migrierte Instanz ohne Benutzerkonto beginnt in `LegacyProtected` und gibt kein
+öffentlich nutzbares Browser-Setup frei. Vorhandene Benutzernamen und Hashes wechseln
+direkt nach `Complete` und bleiben unverändert. Für die einmalige Migration oder lokale
+Wiederherstellung muss der Dienst gestoppt und `Ludus.Api account set` auf dem Server
+ausgeführt werden. Der interaktive Befehl verwendet denselben PasswordHasher, setzt
+`Forms`, invalidiert Sitzungen und hält die Instanzsperre. Die Integration über
+`X-Api-Key` bleibt auch in `LegacyProtected` aktiv.
 
 Der Browser-Anmeldeablauf lautet:
 

@@ -1,11 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
-using System.Text;
 using Ludus.Api.Security;
 using Ludus.Application.Security;
 using Ludus.Domain.Common;
 using Ludus.Infrastructure.Configuration;
 using Ludus.Infrastructure.Persistence;
+using Ludus.Infrastructure.Security;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -17,13 +17,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Ludus.Api.Features;
 
 public sealed record LoginRequest([Required, MaxLength(128)] string Username, [Required, MaxLength(1024)] string Password);
-public sealed record AccountSetupRequest([Required, MaxLength(128)] string Username, [Required, MinLength(12), MaxLength(1024)] string Password,
-    AuthenticationMethod AuthenticationMethod, [MaxLength(64)] string? TransitionCode);
+public sealed record AccountSetupRequest([Required, MaxLength(128)] string Username,
+    [Required, MinLength(12), MaxLength(1024)] string Password);
 public sealed record SecurityRequest(AuthenticationMethod AuthenticationMethod, [Required, MaxLength(128)] string Username, [MaxLength(1024)] string? Password,
     bool TrustForwardedHeaders, [Range(1, 10)] int ForwardLimit, [MaxLength(32)] string[] TrustedProxyNetworks);
 
 [ApiController, Route("api/v1/auth")]
-public sealed class AuthController(AppDbContext database, ISecretProtector secrets, IAntiforgery antiforgery, LudusPaths paths) : ControllerBase
+public sealed class AuthController(AppDbContext database, ISecretProtector secrets, IAntiforgery antiforgery,
+    AccountManager accounts, LudusPaths paths) : ControllerBase
 {
     [HttpGet("csrf"), AllowAnonymous]
     public IActionResult Csrf()
@@ -44,8 +45,8 @@ public sealed class AuthController(AppDbContext database, ISecretProtector secre
         {
             authenticated = User.Identity?.IsAuthenticated == true,
             authenticationMethod = settings.AuthenticationMethod,
-            setupRequired = settings.AccountSetupMode != AccountSetupMode.Complete,
-            setupProtected = settings.AccountSetupMode == AccountSetupMode.LegacyProtected
+            setupRequired = settings.AccountSetupMode == AccountSetupMode.NewInstance,
+            localSetupRequired = settings.AccountSetupMode == AccountSetupMode.LegacyProtected
         });
     }
 
@@ -66,27 +67,16 @@ public sealed class AuthController(AppDbContext database, ISecretProtector secre
     [HttpPost("setup"), AllowAnonymous, EnableRateLimiting("login")]
     public async Task<IActionResult> Setup(AccountSetupRequest request, CancellationToken cancellationToken)
     {
-        var settings = await database.SecuritySettings.SingleAsync(cancellationToken);
-        if (settings.AccountSetupMode == AccountSetupMode.Complete) return Conflict(new { code = "AccountAlreadyConfigured" });
+        var settings = await database.SecuritySettings.AsNoTracking().SingleAsync(cancellationToken);
+        if (settings.AccountSetupMode != AccountSetupMode.NewInstance)
+            return Conflict(new { code = "AccountSetupUnavailable" });
         if (string.IsNullOrWhiteSpace(request.Username)) return BadRequest(new { code = "CredentialsRequired" });
-        if (settings.AccountSetupMode == AccountSetupMode.LegacyProtected)
-        {
-            if (request.TransitionCode is null || settings.SetupTokenHash is null) return Unauthorized();
-            var supplied = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(request.TransitionCode)));
-            if (!ApiAuthentication.Matches(settings.SetupTokenHash, supplied)) return Unauthorized();
-        }
-        settings.Username = request.Username.Trim();
-        settings.PasswordHash = new PasswordHasher<string>().HashPassword(settings.Username, request.Password);
-        settings.AuthenticationMethod = request.AuthenticationMethod;
-        settings.AccountSetupMode = AccountSetupMode.Complete;
-        settings.SetupTokenHash = null;
-        settings.SessionVersion = Guid.NewGuid();
-        await database.SaveChangesAsync(cancellationToken);
-        System.IO.File.Delete(Path.Combine(paths.ConfigDirectory, "account-setup-token"));
+        var sessionVersion = await accounts.SetCredentialsAsync(
+            request.Username, request.Password, AccountSetupMode.NewInstance, cancellationToken);
+        if (sessionVersion is null) return Conflict(new { code = "AccountSetupUnavailable" });
         System.IO.File.Delete(Path.Combine(paths.ConfigDirectory, "bootstrap-api-key"));
-        if (settings.AuthenticationMethod == AuthenticationMethod.Forms)
-            await HttpContext.SignInAsync(ApiAuthentication.CookieScheme, ApiAuthentication.Principal(settings.SessionVersion, "Password"),
-                new AuthenticationProperties { IsPersistent = false, ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12) });
+        await HttpContext.SignInAsync(ApiAuthentication.CookieScheme, ApiAuthentication.Principal(sessionVersion.Value, "Password"),
+            new AuthenticationProperties { IsPersistent = false, ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12) });
         return NoContent();
     }
 

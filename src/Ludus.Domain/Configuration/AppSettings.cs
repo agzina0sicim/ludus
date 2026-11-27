@@ -47,7 +47,6 @@ public sealed class SecuritySettings : Entity
     public required ProtectedSecret ApiKey { get; set; }
     public AuthenticationMethod AuthenticationMethod { get; set; } = AuthenticationMethod.Forms;
     public AccountSetupMode AccountSetupMode { get; set; } = AccountSetupMode.NewInstance;
-    public string? SetupTokenHash { get; set; }
     public string? Username { get; set; }
     public string? PasswordHash { get; set; }
     public Guid SessionVersion { get; set; }

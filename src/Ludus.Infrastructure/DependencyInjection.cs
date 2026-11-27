@@ -90,6 +90,7 @@ public static class DependencyInjection
         services.AddScoped<IAutomationTask, BackupTask>();
         services.AddScoped<DatabaseSeeder>();
         services.AddScoped<DatabaseInitializer>();
+        services.AddScoped<AccountManager>();
         return services;
     }
 }

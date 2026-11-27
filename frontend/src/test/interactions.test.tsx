@@ -1,4 +1,4 @@
-import { render, screen, waitFor, renderHook, act } from '@testing-library/react';
+import { render, screen, waitFor, renderHook, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useResource } from '../hooks';
 import { resetCsrf } from '../api';
 import { Field } from '../ui';
+import { App } from '../App';
 
 const json = (body: unknown) =>
     new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
@@ -31,6 +32,63 @@ it('labels selects independently of their options and help text', () => {
 beforeEach(() => {
     localStorage.setItem('ludus.locale', 'de');
     resetCsrf();
+});
+it('shows only username and confirmed password for a new instance setup', async () => {
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+            json({
+                authenticated: false,
+                authenticationMethod: 'Forms',
+                setupRequired: true,
+                localSetupRequired: false,
+            }),
+        ),
+    );
+    render(
+        <LocaleProvider>
+            <MemoryRouter>
+                <App />
+            </MemoryRouter>
+        </LocaleProvider>,
+    );
+    const heading = await screen.findByRole('heading', { name: 'Administratorkonto einrichten' });
+    const form = heading.parentElement!.querySelector('form')!;
+    expect(within(form).getByLabelText('Benutzername')).toBeVisible();
+    expect(within(form).getByLabelText('Passwort (mindestens 12 Zeichen)')).toHaveAttribute(
+        'autocomplete',
+        'new-password',
+    );
+    expect(within(form).getByLabelText('Passwort wiederholen')).toHaveAttribute(
+        'autocomplete',
+        'new-password',
+    );
+    expect(within(form).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(form.querySelectorAll('input')).toHaveLength(3);
+});
+
+it('does not expose browser account setup for a legacy API-key-only instance', async () => {
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+            json({
+                authenticated: false,
+                authenticationMethod: 'Forms',
+                setupRequired: false,
+                localSetupRequired: true,
+            }),
+        ),
+    );
+    render(
+        <LocaleProvider>
+            <MemoryRouter>
+                <App />
+            </MemoryRouter>
+        </LocaleProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: 'Administratorkonto lokal einrichten' })).toBeVisible();
+    expect(document.querySelector('form')).not.toBeInTheDocument();
+    expect(document.querySelector('input')).not.toBeInTheDocument();
 });
 it('shows rejected releases with reasons and only allows accepted grabs', async () => {
     const make = (accepted: boolean, title: string) => ({

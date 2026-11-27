@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Ludus.Api.Security;
@@ -37,8 +36,7 @@ public sealed class ApiSecurityTests
         using var setup = await browser.PostAsJsonAsync("/api/v1/auth/setup", new
         {
             username = "administrator",
-            password = "correct horse battery staple",
-            authenticationMethod = "Forms"
+            password = "correct horse battery staple"
         });
         Assert.Equal(HttpStatusCode.NoContent, setup.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/api/v1/games")).StatusCode);
@@ -68,39 +66,39 @@ public sealed class ApiSecurityTests
     }
 
     [Fact]
-    public async Task LegacyApiKeyInstallationRequiresOneTimeTransitionCode()
+    public async Task LegacyApiKeyInstallationRejectsAnonymousBrowserSetupAndKeepsApiKeyAccess()
     {
         await using var fixture = new ApiFixture();
-        const string transitionCode = "legacy-transition-code";
+        using var integration = await fixture.AuthorizedClientAsync();
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var settings = await database.SecuritySettings.SingleAsync();
-            settings.AccountSetupMode = AccountSetupMode.LegacyProtected;
-            settings.SetupTokenHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(transitionCode)));
+            var legacySettings = await database.SecuritySettings.SingleAsync();
+            legacySettings.AccountSetupMode = AccountSetupMode.LegacyProtected;
             await database.SaveChangesAsync();
         }
 
         using var browser = fixture.Client();
+        var state = await (await browser.GetAsync("/api/v1/auth/session")).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(state.GetProperty("setupRequired").GetBoolean());
+        Assert.True(state.GetProperty("localSetupRequired").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await integration.GetAsync("/api/v1/games")).StatusCode);
+        using var unauthorized = await browser.GetAsync("/api/v1/games");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+        Assert.Null(unauthorized.Headers.WwwAuthenticate.SingleOrDefault());
+
         await CsrfAsync(browser);
         using var rejected = await browser.PostAsJsonAsync("/api/v1/auth/setup", new
         {
             username = "administrator",
-            password = "correct horse battery staple",
-            authenticationMethod = "Forms",
-            transitionCode = "wrong-code"
+            password = "correct horse battery staple"
         });
-        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
-
-        using var accepted = await browser.PostAsJsonAsync("/api/v1/auth/setup", new
-        {
-            username = "administrator",
-            password = "correct horse battery staple",
-            authenticationMethod = "Forms",
-            transitionCode
-        });
-        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/api/v1/games")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+        await using var verificationScope = fixture.Factory.Services.CreateAsyncScope();
+        var settings = await verificationScope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .SecuritySettings.AsNoTracking().SingleAsync();
+        Assert.Null(settings.Username);
+        Assert.Null(settings.PasswordHash);
     }
 
     [Fact]

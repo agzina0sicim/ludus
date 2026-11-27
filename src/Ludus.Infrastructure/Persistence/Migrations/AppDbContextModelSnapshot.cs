@@ -525,9 +525,6 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SessionVersion")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("SetupTokenHash")
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("TrustForwardedHeaders")
                         .HasColumnType("INTEGER");
 

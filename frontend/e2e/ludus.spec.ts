@@ -34,7 +34,6 @@ async function signIn(page: Page) {
     await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
     await page.getByLabel('Passwort (mindestens 12 Zeichen)', { exact: true }).fill(administratorPassword);
     await page.getByLabel('Passwort wiederholen', { exact: true }).fill(administratorPassword);
-    await page.getByLabel('Anmeldemethode', { exact: true }).selectOption('Forms');
     await page.getByRole('button', { name: 'Konto erstellen', exact: true }).click();
   } else {
     await page.getByLabel('Benutzername', { exact: true }).fill(administrator);

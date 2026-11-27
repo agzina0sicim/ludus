@@ -235,7 +235,7 @@ build_release() {
     mkdir -p "$build_dir/source" "$build_dir/cache" "$build_dir/dotnet" \
         "$build_dir/home/.config" "$build_dir/home/.local/share" "$build_dir/tmp" "$build_dir/runtime"
     tar -C "$source_dir" --exclude=node_modules --exclude=bin --exclude=obj --exclude=dist --exclude=wwwroot --exclude='.env*' \
-        -cf "$work_dir/source.tar" global.json Directory.Build.props Directory.Packages.props NuGet.Config src frontend
+        -cf "$work_dir/source.tar" global.json Directory.Build.props Directory.Packages.props NuGet.Config src frontend scripts/ludus-launcher.sh
     tar --extract --file "$work_dir/source.tar" --directory "$build_dir/source" --no-same-owner
     chown -R -h ludus-build: "$build_dir"
     chmod 0700 "$build_dir/home" "$build_dir/tmp" "$build_dir/runtime"
@@ -257,8 +257,9 @@ build_release() {
             mkdir -p src/Ludus.Api/wwwroot
             cp -a frontend/dist/. src/Ludus.Api/wwwroot/
             dotnet publish src/Ludus.Api/Ludus.Api.csproj -c Release --no-restore -o "$1/publish" /p:UseAppHost=false
+            install -m 0755 scripts/ludus-launcher.sh "$1/publish/Ludus.Api"
         ' bash "$build_dir"
-    [[ -s $build_dir/publish/Ludus.Api.dll && -s $build_dir/publish/wwwroot/index.html ]] || die 'Published release is incomplete.'
+    [[ -s $build_dir/publish/Ludus.Api.dll && -x $build_dir/publish/Ludus.Api && -s $build_dir/publish/wwwroot/index.html ]] || die 'Published release is incomplete.'
     invalid=$(find "$build_dir/publish" ! -type f ! -type d -print -quit)
     [[ -z $invalid ]] || die 'Publish output contains a symlink or special file.'
     release_dir="/opt/ludus/releases/$release_id"

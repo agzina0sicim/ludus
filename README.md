@@ -194,7 +194,7 @@ Auch ein abweichender Papierkorb-Pfad benötigt Schreibfreigabe. Für Hardlinks 
 
 ## Erste Einrichtung
 
-1. Oberfläche auf Port 8080 öffnen und das Administratorkonto mit Benutzername und einem mindestens zwölf Zeichen langen Passwort anlegen. **Forms** verwendet die Ludus-Anmeldeseite und ist der Standard. **Basic** verwendet den nativen Browserdialog und darf nur über HTTPS eingesetzt werden.
+1. Oberfläche auf Port 8080 öffnen und das Administratorkonto mit Benutzername und einem mindestens zwölf Zeichen langen Passwort anlegen und bestätigen. Die Ersteinrichtung verwendet immer **Forms** mit der Ludus-Anmeldeseite. **Basic** kann anschließend unter **Allgemein & Sicherheit** aktiviert werden, verwendet den nativen Browserdialog und darf nur über HTTPS eingesetzt werden.
 2. Unter **Medienverwaltung** bestehende Root Folders hinterlegen. Der Seed legt zunächst einen Root `ROMs` für das konfigurierte ROM-Verzeichnis an. Entweder diesen gemeinsamen Root oder nicht überlappende plattformspezifische Roots verwenden. Einen ungenutzten gemeinsamen Seed-Root vor dem Einrichten seiner Unterordner als separate Roots entfernen.
 3. **Metadaten** einrichten: IGDB benötigt Twitch Client-ID und Client-Secret; ScreenScraper Entwickler-ID/-Passwort und gegebenenfalls Benutzername/-Passwort. Aktivieren, speichern und testen. Die bevorzugte Metadatensprache ist von der UI-Sprache unabhängig. Plattform-System-IDs, primären Provider und Fallback in der Plattformverwaltung prüfen.
 4. Unter **Custom Formats** gemeinsame Erkennungsregeln pflegen. Unter **Profile** für jede Plattform mindestens ein Profil mit eigenen Scores anlegen. Das Standardprofil bevorzugt Europe (`+100`) vor USA (`+80`), bewertet CHD mit `+50` und Beta/Demo/Proto stark negativ. Nach Erreichen des Cutoffs werden keine weiteren Basis-ROM-Upgrades gesucht.
@@ -314,7 +314,15 @@ Alle REST-Aufrufe liegen unter `/api/v1`. Externe Anwendungen senden weiterhin d
 
 Der Reverse Proxy soll HTTPS terminieren, den ursprünglichen `Host` erhalten, `X-Forwarded-For` und `X-Forwarded-Proto` setzen und WebSockets für `/hubs/activity` weiterleiten. In Ludus nur das tatsächlich verwendete private Proxy-Netz und die passende Hop-Anzahl freigeben. Proxy-Vertrauen ersetzt keine Authentifizierung. Ein separater Hostname mit Weiterleitung ab `/` ist der vorgesehene Betrieb; ein beliebiger URL-Unterpfad ist nicht konfiguriert.
 
-Falls die Administrator-Zugangsdaten vergessen wurden, lokal im persistenten Konfigurationsverzeichnis eine leere Datei `reset-account` anlegen und Ludus neu starten. Ludus entfernt den Marker und schreibt einen einmaligen Code nach `account-setup-token` (unter Unix nur für den Besitzer lesbar). Danach im Browser ein neues Konto einrichten und die Token-Datei nicht weitergeben. Dieser Weg erfordert lokalen Dateisystemzugriff und kann daher nicht von einem anonymen Besucher ausgelöst werden.
+Falls die Administrator-Zugangsdaten vergessen wurden, das Konto ausschließlich lokal auf dem Server neu setzen. Der Befehl fragt Benutzername, Passwort und Passwortbestätigung interaktiv ab; Zugangsdaten stehen weder in der Kommandozeile noch in der Prozessliste oder in Logs. Ludus muss gestoppt sein, damit der Befehl die Instanz exklusiv sperren kann:
+
+```bash
+systemctl stop ludus
+/opt/ludus/current/Ludus.Api account set
+systemctl start ludus
+```
+
+Der Befehl verwendet denselben ASP.NET-Core-`PasswordHasher` wie die Webanwendung, stellt den Forms-Modus ein und invalidiert bestehende Sitzungen. Bei einem manuellen portablen Deployment mit gesetzten `Ludus__*`-Umgebungsvariablen lautet der entsprechende Aufruf `dotnet Ludus.Api.dll account set`.
 
 Für Homarr/Homepage eignen sich der anonyme Status-Endpunkt und authentifizierte API-Abfragen wie `/api/v1/system/info`, `/api/v1/system/health` oder `/api/v1/activity/queue`. Ein speziell für Ludus bereitgestelltes Dashboard-Widget ist nicht Teil dieses Repositories. Signierte Medien-URLs enthalten zeitlich begrenzte Zugriffstoken; Proxy-Logs sollten deren Query-Strings ebenfalls nicht dauerhaft sammeln.
 
@@ -340,7 +348,7 @@ docker compose -f docker-compose.yml -f docker-compose.hardlinks.yml ps
 
 Beim einfachen Layout die beiden `-f`-Argumente weglassen. Migrationen laufen automatisch beim App-Start. Ein älteres Image nicht ungeprüft gegen eine bereits migrierte Datenbank starten.
 
-Beim Upgrade werden vorhandene Benutzernamen und Passwort-Hashes übernommen. Eine bisher ausschließlich per API-Key geschützte Instanz erzeugt beim ersten Start lokal `/config/account-setup-token`; nur mit diesem einmaligen Code lässt sich das Administratorkonto im Browser anlegen. Bestehende `X-Api-Key`-Integrationen arbeiten während und nach diesem Übergang unverändert weiter.
+Beim Upgrade werden vorhandene Benutzernamen und Passwort-Hashes unverändert übernommen; eine erneute Einrichtung ist nicht erforderlich. Eine bisher ausschließlich per API-Key geschützte Instanz bleibt für die Browser-Einrichtung gesperrt. Nach dem Upgrade einmalig den Dienst stoppen, `/opt/ludus/current/Ludus.Api account set` lokal ausführen und den Dienst wieder starten. Bestehende `X-Api-Key`-Integrationen arbeiten vor, während und nach diesem Übergang unverändert weiter. Die frühere Token- und Markerdatei werden nicht mehr verwendet und beim Start entfernt.
 
 Globale Altprofile werden pro tatsächlich verwendeter Plattform verlustfrei dupliziert; Spiele werden dem passenden Klon zugeordnet und Custom-Format-Scores kopiert. Ein unbenutztes Profil bleibt erhalten und wird der Plattform mit der kleinsten ID zugeordnet. Nach dem Upgrade die Zuordnung dieses Profils prüfen und bei Bedarf über die Profilseite ändern. Vor dem Update wie üblich ein Backup erstellen.
 

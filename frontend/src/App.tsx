@@ -57,9 +57,10 @@ export function App() {
                 </div>
             }
         >
-            {session.data.setupRequired ? (
+            {session.data.localSetupRequired ? (
+                <LocalAccountSetup />
+            ) : session.data.setupRequired ? (
                 <AccountSetup
-                    protectedUpgrade={session.data.setupProtected}
                     onComplete={() => {
                         setExpired(false);
                         session.reload();
@@ -192,19 +193,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
     );
 }
 
-function AccountSetup({
-    protectedUpgrade,
-    onComplete,
-}: {
-    protectedUpgrade: boolean;
-    onComplete: () => void;
-}) {
+function AccountSetup({ onComplete }: { onComplete: () => void }) {
     const { t } = useLocale();
     const [username, setUsername] = useState('administrator');
     const [password, setPassword] = useState('');
     const [confirmation, setConfirmation] = useState('');
-    const [transitionCode, setTransitionCode] = useState('');
-    const [authenticationMethod, setAuthenticationMethod] = useState<'Forms' | 'Basic'>('Forms');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<unknown>();
     return (
@@ -218,15 +211,10 @@ function AccountSetup({
                     <p className="eyebrow">{t('ERSTE EINRICHTUNG', 'INITIAL SETUP')}</p>
                     <h1>{t('Administratorkonto einrichten', 'Set up administrator account')}</h1>
                     <p className="muted">
-                        {protectedUpgrade
-                            ? t(
-                                  'Diese aktualisierte Instanz ist geschützt. Lies den Einmalcode lokal aus account-setup-token im Konfigurationsordner.',
-                                  'This upgraded instance is protected. Read the one-time code locally from account-setup-token in the configuration directory.',
-                              )
-                            : t(
-                                  'Lege die Zugangsdaten für diese neue Ludus-Instanz fest.',
-                                  'Create credentials for this new Ludus instance.',
-                              )}
+                        {t(
+                            'Lege die Zugangsdaten für diese neue Ludus-Instanz fest.',
+                            'Create credentials for this new Ludus instance.',
+                        )}
                     </p>
                     <form
                         onSubmit={async (event) => {
@@ -251,8 +239,6 @@ function AccountSetup({
                                     body: {
                                         username,
                                         password,
-                                        authenticationMethod,
-                                        transitionCode: protectedUpgrade ? transitionCode.trim() : null,
                                     },
                                 });
                                 resetCsrf();
@@ -264,17 +250,6 @@ function AccountSetup({
                             }
                         }}
                     >
-                        {protectedUpgrade && (
-                            <Field label={t('Einmaliger Übergangscode', 'One-time transition code')}>
-                                <input
-                                    type="password"
-                                    required
-                                    maxLength={64}
-                                    value={transitionCode}
-                                    onChange={(event) => setTransitionCode(event.target.value)}
-                                />
-                            </Field>
-                        )}
                         <Field label={t('Benutzername', 'Username')}>
                             <input
                                 autoComplete="username"
@@ -308,28 +283,37 @@ function AccountSetup({
                                 onChange={(event) => setConfirmation(event.target.value)}
                             />
                         </Field>
-                        <Field
-                            label={t('Anmeldemethode', 'Authentication method')}
-                            hint={t(
-                                'Forms verwendet die Ludus-Anmeldeseite. Basic verwendet den nativen Browserdialog und sollte nur über HTTPS genutzt werden.',
-                                'Forms uses the Ludus sign-in page. Basic uses the native browser dialog and should only be used over HTTPS.',
-                            )}
-                        >
-                            <select
-                                value={authenticationMethod}
-                                onChange={(event) =>
-                                    setAuthenticationMethod(event.target.value as 'Forms' | 'Basic')
-                                }
-                            >
-                                <option value="Forms">Forms</option>
-                                <option value="Basic">Basic</option>
-                            </select>
-                        </Field>
                         <ErrorBox error={error} />
                         <Button type="submit" variant="primary" className="full" busy={busy}>
                             {t('Konto erstellen', 'Create account')}
                         </Button>
                     </form>
+                </div>
+            </main>
+        </div>
+    );
+}
+
+function LocalAccountSetup() {
+    const { t } = useLocale();
+    return (
+        <div className="login-screen">
+            <main className="login-panel setup-panel">
+                <div className="login-top">
+                    <Brand />
+                    <LanguageSwitch />
+                </div>
+                <div className="login-content">
+                    <p className="eyebrow">{t('LOKALE EINRICHTUNG', 'LOCAL SETUP')}</p>
+                    <h1>
+                        {t('Administratorkonto lokal einrichten', 'Set up administrator account locally')}
+                    </h1>
+                    <p className="muted">
+                        {t(
+                            'Diese aktualisierte Instanz kann nicht im Browser übernommen werden. Stoppe Ludus und führe auf dem Server „Ludus.Api account set“ aus.',
+                            'This upgraded instance cannot be claimed in the browser. Stop Ludus and run “Ludus.Api account set” on the server.',
+                        )}
+                    </p>
                 </div>
             </main>
         </div>

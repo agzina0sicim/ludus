@@ -54,4 +54,14 @@ dotnet Ludus.Api.dll
 
 Die Datenpfade müssen vor dem Start passend bereitgestellt werden. Der Vorgang ersetzt nicht die systemd-Einrichtung. Beim Aktualisieren eines bestehenden Dienstes zuerst ein Backup erstellen und den Dienst stoppen; Datenbank und Keyring bleiben außerhalb des Anwendungsverzeichnisses. Ein älteres Release darf nicht ungeprüft gegen eine bereits migrierte Datenbank gestartet werden.
 
+Vorhandene Konten behalten Benutzername und Password-Hash. Bei einer älteren API-Key-only-Datenbank oder zur lokalen Kontowiederherstellung wird das Konto bei gestopptem Dienst interaktiv gesetzt:
+
+```bash
+systemctl stop ludus
+/opt/ludus/current/Ludus.Api account set
+systemctl start ludus
+```
+
+Bei einem portablen Archiv mit korrekt gesetzten `Ludus__*`-Umgebungsvariablen stattdessen `dotnet Ludus.Api.dll account set` ausführen. Der Browser bietet für eine API-Key-only-Altinstanz kein Setup an; vorhandene `X-Api-Key`-Integrationen bleiben aktiv.
+
 Unter Linux können heruntergeladene Archive mit `sha256sum --check SHA256SUMS` geprüft werden, wenn alle drei Archive daneben liegen. Unter PowerShell liefert `Get-FileHash -Algorithm SHA256` die Vergleichswerte.

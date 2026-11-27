@@ -17,8 +17,10 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Ludus.Domain.Common;
+using Ludus.Api;
 
-var builder = WebApplication.CreateBuilder(args);
+var accountCommand = AccountCommand.IsCommand(args);
+var builder = WebApplication.CreateBuilder(accountCommand ? [] : args);
 var paths = LudusPaths.FromConfiguration(builder.Configuration);
 paths.EnsureConfigDirectories();
 
@@ -79,6 +81,18 @@ builder.Services.AddRateLimiter(options =>
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 await using var app = builder.Build();
+
+if (accountCommand)
+{
+    Environment.ExitCode = args.Length == 2 && string.Equals(args[1], "set", StringComparison.OrdinalIgnoreCase)
+        ? await AccountCommand.RunAsync(app.Services, paths)
+        : 2;
+    if (Environment.ExitCode == 2 && (args.Length != 2 || !string.Equals(args[1], "set", StringComparison.OrdinalIgnoreCase)))
+    {
+        Console.Error.WriteLine("Verwendung / Usage: Ludus.Api account set");
+    }
+    return;
+}
 
 try
 {

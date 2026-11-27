@@ -32,8 +32,8 @@ Die Oberfläche ist deutsch/englisch übersetzbar. Die gespeicherte UI-Sprache i
 
 ## Anmeldung und Secrets
 
-- Beim ersten Start richtet der Browser ein Administratorkonto ein. Forms verwendet die Ludus-Seite und ein HttpOnly-Cookie; Basic verwendet den nativen Browserdialog. Der API-Key ist ausschließlich für externe `X-Api-Key`-Integrationen vorgesehen.
-- Bei einer API-Key-only-Altinstanz verlangt der Browser zusätzlich den lokalen Einmalcode aus `/config/account-setup-token`. Ein anonymer Besucher kann das Konto ohne Dateisystemzugriff nicht übernehmen.
+- Beim ersten Start richtet der Browser ein Administratorkonto ausschließlich mit Benutzername, Passwort und Bestätigung ein. Forms verwendet die Ludus-Seite und ein HttpOnly-Cookie; Basic kann danach in den Sicherheitseinstellungen aktiviert werden und verwendet den nativen Browserdialog. Der API-Key ist ausschließlich für externe `X-Api-Key`-Integrationen vorgesehen.
+- Bei einer API-Key-only-Altinstanz ist das Browser-Setup gesperrt. Der Betreiber stoppt den Dienst und führt `Ludus.Api account set` lokal und interaktiv aus; ein anonymer Besucher kann die Instanz nicht übernehmen.
 - Jeder schreibende API-Aufruf erhält einen CSRF-Header. Nach Anmeldung und Schlüsselwechsel wird der Token erneut bezogen. Fehlgeschlagene Schreibaktionen werden nicht automatisch wiederholt.
 - Bei gespeicherten Secrets gibt es drei explizite Aktionen: unverändert lassen (`null`), ersetzen (neuer Wert) oder löschen (`""`). Der Server liefert ausschließlich die Konfiguriert-Flags zurück.
 - Formular-Payloads enthalten nur die erlaubten Request-Felder. IDs, Versionsinformationen und andere gelesene Datenbankfelder werden nicht zurückgeschrieben.

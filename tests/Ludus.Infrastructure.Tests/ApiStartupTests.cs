@@ -34,6 +34,8 @@ public sealed class ApiStartupTests
             Assert.True(response.Headers.CacheControl!.NoStore);
             Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
             Assert.True(File.Exists(Path.Combine(directory, "config", "ludus.db")));
+            Assert.False(File.Exists(Path.Combine(directory, "config", "account-setup-token")));
+            Assert.False(File.Exists(Path.Combine(directory, "config", "reset-account")));
             using var negotiate = await client.PostAsync("/hubs/activity/negotiate?negotiateVersion=1", null);
             Assert.Equal(HttpStatusCode.Unauthorized, negotiate.StatusCode);
             await using (var scope = factory.Services.CreateAsyncScope())

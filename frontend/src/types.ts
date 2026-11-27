@@ -124,6 +124,6 @@ export type Session = {
   authenticated: boolean;
   authenticationMethod: 'Forms' | 'Basic';
   setupRequired: boolean;
-  setupProtected: boolean;
+  localSetupRequired: boolean;
 };
 export type MediaLink = { url: string; expiresAtUtc: string };
