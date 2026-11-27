@@ -13,7 +13,6 @@ const LibraryPage = lazy(() => import('./pages/Library'));
 const AddPage = lazy(() => import('./pages/AddGame'));
 const GamePage = lazy(() => import('./pages/GameDetails'));
 const ActivityPage = lazy(() => import('./pages/Activity'));
-const CalendarPage = lazy(() => import('./pages/Calendar'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const SystemPage = lazy(() => import('./pages/System'));
 
@@ -450,7 +449,6 @@ function Shell({ logout }: { logout: () => void }) {
                         <Route path="/add" element={<AddPage />} />
                         <Route path="/games/:id" element={<GamePage />} />
                         <Route path="/activity/*" element={<ActivityPage />} />
-                        <Route path="/calendar" element={<CalendarPage />} />
                         <Route path="/settings/*" element={<SettingsPage />} />
                         <Route path="/system/*" element={<SystemPage />} />
                         <Route path="/library" element={<Navigate replace to="/" />} />

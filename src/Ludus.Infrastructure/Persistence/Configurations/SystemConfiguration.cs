@@ -20,7 +20,6 @@ public sealed class SystemConfiguration : IEntityTypeConfiguration<AppSettings>,
         entity.Check("Language", "\"Language\" IN ('de', 'en') AND length(trim(\"MetadataLanguage\")) BETWEEN 2 AND 16");
         entity.Check("Storage", "\"MinimumFreeSpaceBytes\" >= 0 AND \"MaximumIndexerSizeBytes\" >= 0");
         entity.Check("Permissions", "\"FilePermissions\" GLOB '0[0-7][0-7][0-7]' AND \"DirectoryPermissions\" GLOB '0[0-7][0-7][0-7]'");
-        entity.Check("Calendar", "\"FirstDayOfWeek\" BETWEEN 0 AND 6");
     }
 
     public void Configure(EntityTypeBuilder<SecuritySettings> entity)

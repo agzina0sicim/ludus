@@ -257,19 +257,6 @@ export const downloadHandlingFields = [
     'Redownload failed interactive grabs',
   ),
 ];
-export const calendarFields = [
-  field(
-    'firstDayOfWeek',
-    'Erster Wochentag (0 = Sonntag, 1 = Montag)',
-    'First day of week (0 = Sunday, 1 = Monday)',
-    { type: 'number', required: true, min: 0, max: 6 },
-  ),
-  select('calendarHeaderFormat', 'Spaltenüberschrift', 'Column heading', [
-    'ShortWeekday',
-    'ShortWeekdayDate',
-    'LongWeekday',
-  ]),
-];
 export const dateDisplayFields = [
   select('shortDateFormat', 'Kurzes Datumsformat', 'Short date format', [
     'dd.MM.yyyy',

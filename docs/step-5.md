@@ -7,7 +7,6 @@ Die Oberfläche verwendet React, TypeScript, React Router, Vite, Tailwind CSS un
 | Route | Funktionen |
 | --- | --- |
 | `/` | Poster- und Tabellenansicht, Suchfeld, Plattform-/Root-Folder-/Status-/DAT-Filter, serverseitige Seitennavigation und gezielter Library-Scan |
-| `/calendar` | Wochenansicht mit konfigurierbarem Wochenanfang/Spaltenformat und Kennzeichnung ungenauer Termine |
 | `/add` | Verzögerte Metadatensuche, IGDB/ScreenScraper/Plattform-Standard, manuelle Erfassung, Root Folder, Profil und Monitoring |
 | `/games/:id` | Metadaten und Cover, Base/Update/DLC-Dateien, Hashes, DAT-Status, signierter ROM-Download, Verlauf und interaktive Suche mit aufklappbaren Ablehnungsgründen |
 | `/activity` | Live-Warteschlange mit Fortschritt, Geschwindigkeit, ETA und Entfernen eines Auftrags |
@@ -21,7 +20,7 @@ Die Oberfläche verwendet React, TypeScript, React Router, Vite, Tailwind CSS un
 | `/settings/clients` | qBittorrent/Transmission/SABnzbd, Completed Download Handling, getrennte Ersatzsuche, Kategorie `ludus`, Bereinigung und Remote Path Mappings |
 | `/settings/metadata` | Bevorzugte Metadatensprache, verschlüsselte Provider-Zugangsdaten, Cache-Dauer, Verbindungstest und System-ID-Liste |
 | `/settings/connect` | Mehrere Discord-/Gotify-/Telegram-/generische Webhooks, Ereignisauswahl und Testnachricht |
-| `/settings/ui` | Kalender, kurze/lange Datums- und Zeitformate, Light/Dark/Auto sowie Deutsch/Englisch |
+| `/settings/ui` | Kurze/lange Datums- und Zeitformate, Light/Dark/Auto sowie Deutsch/Englisch |
 | `/settings/general` | Allgemeine Einstellungen, Forms-/Basic-Login, private Proxy-Netze sowie Integrations-API-Key-Anzeige und -Reset |
 | `/system` | Systeminformationen und Health-Warnungen |
 | `/system/tasks` | Aufgaben aktivieren/deaktivieren, manuell starten und Ausführungsverlauf |
@@ -119,7 +118,7 @@ Standardmäßig wird der lokal installierte Edge verwendet. Alternativ lässt si
 
 Getestete Browser-Abläufe: Cookie-/Forms-Anmeldung, SignalR-Verbindung, Spielverwaltung, DAT-Import und Scan, Prüfsummen, signierter ROM-Download, sämtliche Ansichten, Custom Formats/Profil-Scores, allgemeine Einstellungen, DE/EN, mobile Navigation, Backup-Erstellung/-Download/-Import, Diagnose-Export und API-Key-Rotation.
 
-Abschlussprüfung vom 27.11.2026: 12 Frontend-Tests, 8 Playwright-Abläufe und 146 Backend-Tests bestanden. TypeScript-/Vite-Produktionsbuild und Formatprüfung waren erfolgreich; der .NET-Release-Build lief ohne Warnungen und Fehler, und es bestehen keine ausstehenden EF-Modelländerungen. Die Browserprüfung nutzte eine isolierte Produktionsauslieferung und kontrollierte Desktop-/Mobilansichten, Konto-Setup, Forms-Login, SignalR, Profile/Formate, Kalender/UI-Routen, Live-Datumsvorschau sowie Light/Dark/Auto.
+Abschlussprüfung vom 27.11.2026: 12 Frontend-Tests, 8 Playwright-Abläufe und 146 Backend-Tests bestanden. TypeScript-/Vite-Produktionsbuild und Formatprüfung waren erfolgreich; der .NET-Release-Build lief ohne Warnungen und Fehler, und es bestehen keine ausstehenden EF-Modelländerungen. Die Browserprüfung nutzte eine isolierte Produktionsauslieferung und kontrollierte Desktop-/Mobilansichten, Konto-Setup, Forms-Login, SignalR, Profile/Formate, UI-Routen, Live-Datumsvorschau sowie Light/Dark/Auto.
 
 Externe Provider, Indexer, Download-Clients und Webhooks benötigen eigene Zugangsdaten. Die Browserprüfung führt keine echten externen Downloads oder Webhook-Nachrichten aus. Der Restore-Dialog nutzt den validierten Restore-Endpunkt aus Schritt 4; ein vollständiger Restore benötigt anschließend den Neustart durch Docker/systemd oder einen manuellen Start.
 

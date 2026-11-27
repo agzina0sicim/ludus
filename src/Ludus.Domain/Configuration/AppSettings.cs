@@ -34,8 +34,6 @@ public sealed class AppSettings : Entity
     public int MediaLinkLifetimeSeconds { get; set; } = 300;
     public int MaximumArchiveEntries { get; set; } = 100000;
     public long MaximumExtractedBytes { get; set; } = 536870912000;
-    public int FirstDayOfWeek { get; set; } = 1;
-    public CalendarHeaderFormat CalendarHeaderFormat { get; set; } = CalendarHeaderFormat.ShortWeekdayDate;
     public string ShortDateFormat { get; set; } = "dd.MM.yyyy";
     public string LongDateFormat { get; set; } = "dddd, d. MMMM yyyy";
     public bool Use12HourTime { get; set; }

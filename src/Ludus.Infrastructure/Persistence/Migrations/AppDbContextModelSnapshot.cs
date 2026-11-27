@@ -341,11 +341,6 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<int>("BackupRetentionCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("CalendarHeaderFormat")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("CreateEmptyFolders")
                         .HasColumnType("INTEGER");
 
@@ -368,9 +363,6 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<string>("FilePermissions")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("FirstDayOfWeek")
-                        .HasColumnType("INTEGER");
 
                     b.Property<int>("HealthCheckIntervalMinutes")
                         .HasColumnType("INTEGER");
@@ -471,10 +463,6 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.ToTable("AppSettings", t =>
                         {
                             t.HasCheckConstraint("CK_AppSettings_ArchiveLimits", "\"MaximumArchiveEntries\" > 0 AND \"MaximumExtractedBytes\" > 0");
-
-                            t.HasCheckConstraint("CK_AppSettings_Calendar", "\"FirstDayOfWeek\" BETWEEN 0 AND 6");
-
-                            t.HasCheckConstraint("CK_AppSettings_CalendarHeaderFormat", "\"CalendarHeaderFormat\" IN ('ShortWeekday', 'ShortWeekdayDate', 'LongWeekday')");
 
                             t.HasCheckConstraint("CK_AppSettings_Intervals", "\"RssIntervalMinutes\" >= 1 AND \"MinimumAgeMinutes\" >= 0 AND \"DownloadRefreshIntervalSeconds\" >= 5 AND \"LibraryScanIntervalHours\" >= 1 AND \"HealthCheckIntervalMinutes\" >= 1 AND \"BackupIntervalHours\" >= 1");
 

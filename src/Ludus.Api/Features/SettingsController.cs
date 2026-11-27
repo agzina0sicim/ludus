@@ -21,7 +21,6 @@ public sealed record SettingsRequest([Required, RegularExpression("^(de|en)$")] 
     bool RedownloadFailedFromInteractiveSearch, [Range(1, 8760)] int LibraryScanIntervalHours,
     [Range(1, 1440)] int HealthCheckIntervalMinutes, [Range(1, 8760)] int BackupIntervalHours, [Range(30, 3600)] int MediaLinkLifetimeSeconds,
     [Range(1, 1000000)] int MaximumArchiveEntries, [Range(1, 17592186044416)] long MaximumExtractedBytes,
-    [Range(0, 6)] int FirstDayOfWeek, CalendarHeaderFormat CalendarHeaderFormat,
     [Required, MaxLength(64)] string ShortDateFormat, [Required, MaxLength(128)] string LongDateFormat,
     bool Use12HourTime, ThemeMode Theme);
 

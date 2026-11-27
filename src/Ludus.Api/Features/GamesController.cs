@@ -204,18 +204,6 @@ public sealed class GamesController(AppDbContext database, MetadataService metad
         return downloadId is null ? Conflict(new { code = "DownloadAlreadyActive" }) : Accepted(new { downloadId });
     }
 
-    [HttpGet("calendar")]
-    public async Task<IActionResult> Calendar([FromQuery] DateTime startUtc, [FromQuery] DateTime endUtc, CancellationToken cancellationToken)
-    {
-        startUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
-        endUtc = DateTime.SpecifyKind(endUtc, DateTimeKind.Utc);
-        if (endUtc <= startUtc || endUtc - startUtc > TimeSpan.FromDays(31)) return BadRequest(new { code = "InvalidCalendarRange" });
-        var games = await database.Games.AsNoTracking().Where(x => x.ReleaseDateUtc >= startUtc && x.ReleaseDateUtc < endUtc)
-            .OrderBy(x => x.ReleaseDateUtc).ThenBy(x => x.SortTitle)
-            .Select(x => new { x.Id, x.Title, x.PlatformId, platform = x.Platform.Name, x.ReleaseDateUtc, x.ReleaseYear, x.ReleaseDatePrecision }).ToArrayAsync(cancellationToken);
-        return Ok(games);
-    }
-
     private void ReplaceTranslations(Game game, MetadataGame data)
     {
         database.GameMetadataTranslations.RemoveRange(game.MetadataTranslations.Where(x => x.Provider == data.Provider));

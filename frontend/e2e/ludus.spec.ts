@@ -170,7 +170,6 @@ test('production library, DAT scan, signed ROM download and all configuration ro
     '/activity',
     '/activity/history',
     '/activity/blocklist',
-    '/calendar',
     '/settings/media',
     '/settings/profiles',
     '/settings/formats',

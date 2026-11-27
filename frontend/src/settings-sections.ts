@@ -35,14 +35,7 @@ export function useSettingsSections() {
       t('IGDB, ScreenScraper und Plattformzuordnungen', 'IGDB, ScreenScraper and platform mappings'),
     ],
     ['connect', 'Connect', t('Webhooks und Benachrichtigungen', 'Webhooks and notifications')],
-    [
-      'ui',
-      'UI',
-      t(
-        'Kalender, Datumsanzeige, Darstellung und Sprache',
-        'Calendar, date display, appearance, and language',
-      ),
-    ],
+    ['ui', 'UI', t('Datumsanzeige, Darstellung und Sprache', 'Date display, appearance, and language')],
     [
       'general',
       t('Allgemein & Sicherheit', 'General & security'),

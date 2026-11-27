@@ -14,7 +14,7 @@ ASP.NET Core und EF Core 10 bilden das Backend; SQLite läuft im WAL-Modus. Das 
 - qBittorrent, Transmission und SABnzbd, feste Kategorie/Label `ludus`, Remote Path Mappings und Completed Download Handling.
 - ZIP/7z, Hardlinks mit Kopier-Fallback, CUE/BIN/GDI-Sets, M3U, Ordnerspiele und Recycling Bin.
 - Forms- oder HTTP-Basic-Anmeldung, separater API-Key für Integrationen, CSRF-Schutz, verschlüsselte Credentials und signierte Medien-Links.
-- Health Checks, Kalender, Zeitpläne, Backups/Restore, bereinigter Diagnose-Export sowie Discord-, Gotify-, Telegram- und generische Webhooks.
+- Health Checks, Zeitpläne, Backups/Restore, bereinigter Diagnose-Export sowie Discord-, Gotify-, Telegram- und generische Webhooks.
 
 ## Betriebsvarianten
 
@@ -199,7 +199,7 @@ Auch ein abweichender Papierkorb-Pfad benötigt Schreibfreigabe. Für Hardlinks 
 3. **Metadaten** einrichten: IGDB benötigt Twitch Client-ID und Client-Secret; ScreenScraper Entwickler-ID/-Passwort und gegebenenfalls Benutzername/-Passwort. Aktivieren, speichern und testen. Die bevorzugte Metadatensprache ist von der UI-Sprache unabhängig. Plattform-System-IDs, primären Provider und Fallback in der Plattformverwaltung prüfen.
 4. Unter **Custom Formats** gemeinsame Erkennungsregeln pflegen. Unter **Profile** für jede Plattform mindestens ein Profil mit eigenen Scores anlegen. Das Standardprofil bevorzugt Europe (`+100`) vor USA (`+80`), bewertet CHD mit `+50` und Beta/Demo/Proto stark negativ. Nach Erreichen des Cutoffs werden keine weiteren Basis-ROM-Upgrades gesucht.
 5. Indexer und Download-Client einrichten. Mindestalter, Maximalgröße, RSS-Intervall, Completed Download Handling und die beiden getrennten Ersatzsuche-Schalter prüfen; anschließend **System → Status & Zustand** öffnen.
-6. Unter **UI** Kalender, Datums-/Zeitformat, Theme und Oberflächensprache festlegen. Ein Wechsel der Oberflächensprache verändert die Metadatensprache nicht.
+6. Unter **UI** Datums-/Zeitformat, Theme und Oberflächensprache festlegen. Ein Wechsel der Oberflächensprache verändert die Metadatensprache nicht.
 7. Vorhandene ROMs über **Bibliothek scannen** aufnehmen. Bei mehrdeutigen Endungen wie `.iso` eine Plattform auswählen. Für neue Spiele Plattform, Root Folder, passendes Profil und Monitoring festlegen.
 
 Root Folders müssen bereits existieren und für Ludus zugänglich sein. Das Umhängen eines Spiels mit vorhandenen Dateizuordnungen ist kein automatischer Verschiebeauftrag. Ein Scan kann eindeutig verschobene vollständige Dateisätze wiederfinden; der bisherige Root muss erreichbar sein.

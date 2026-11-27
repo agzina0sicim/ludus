@@ -6,7 +6,6 @@ public enum AccountSetupMode { NewInstance, LegacyProtected, Complete }
 public enum GrabOrigin { Automatic, Interactive }
 public enum WebhookKind { Discord, Gotify, Telegram, Generic }
 public enum ThemeMode { Light, Dark, Auto }
-public enum CalendarHeaderFormat { ShortWeekday, ShortWeekdayDate, LongWeekday }
 public enum ReleaseDatePrecision { Exact, Month, Year }
 public enum ContentKind { Base, Update, Dlc }
 public enum GameStatus { Missing, Downloading, Available }

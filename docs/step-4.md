@@ -89,7 +89,7 @@ interne Zustände werden nicht aus Request-Objekten übernommen.
 | Bereich | Routen relativ zu `/api/v1` |
 |---|---|
 | Authentifizierung | `GET auth/csrf`, `GET auth/session`, `POST auth/setup`, `POST auth/login`, `POST auth/logout`, `GET/PUT auth/security`, `GET auth/api-key`, `POST auth/api-key/reset` |
-| Bibliothek | `GET/POST games`, `GET/PUT/DELETE games/{id}`, `GET games/calendar`, `PUT games/{id}/metadata`, `POST games/{id}/refresh-metadata` |
+| Bibliothek | `GET/POST games`, `GET/PUT/DELETE games/{id}`, `PUT games/{id}/metadata`, `POST games/{id}/refresh-metadata` |
 | Suche/Grab | `GET games/{id}/search`, `POST games/{id}/grab` |
 | Root Folders | `GET/POST root-folders`, `GET/PUT/DELETE root-folders/{id}` |
 | Plattformen | `GET/POST platforms`, `GET/PUT/DELETE platforms/{id}`, `PUT platforms/{id}/monitoring` |

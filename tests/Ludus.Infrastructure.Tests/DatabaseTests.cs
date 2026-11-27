@@ -23,7 +23,7 @@ public sealed class DatabaseTests
         await using var scope = fixture.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        Assert.Equal(4, (await database.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(5, (await database.Database.GetAppliedMigrationsAsync()).Count());
         Assert.Empty(await database.Database.GetPendingMigrationsAsync());
         Assert.False(database.Database.HasPendingModelChanges());
         Assert.Equal(22, await database.Platforms.CountAsync());
@@ -308,6 +308,37 @@ public sealed class DatabaseTests
         Assert.Null(security.PasswordHash);
         Assert.Equal(originalApiKey, security.ApiKey.Ciphertext);
         Assert.DoesNotContain("SetupTokenHash", await SecuritySettingsColumnNamesAsync(database));
+    }
+
+    [Fact]
+    public async Task SettingsMigrationDropsObsoleteColumnsAndPreservesDisplayPreferences()
+    {
+        await using var fixture = new TestDatabase();
+        await fixture.InitializeAsync();
+        await using var scope = fixture.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var migrator = database.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261127182239_RemoveAccountSetupToken");
+        var settings = await database.AppSettings.SingleAsync();
+        settings.InstanceName = "Existing library";
+        settings.ShortDateFormat = "yyyy-MM-dd";
+        settings.Theme = ThemeMode.Dark;
+        await database.SaveChangesAsync();
+        await database.Database.ExecuteSqlRawAsync("""
+            UPDATE "AppSettings" SET "FirstDayOfWeek" = 0, "CalendarHeaderFormat" = 'LongWeekday';
+            """);
+
+        await migrator.MigrateAsync();
+        settings = await database.AppSettings.AsNoTracking().SingleAsync();
+
+        Assert.Equal("Existing library", settings.InstanceName);
+        Assert.Equal("yyyy-MM-dd", settings.ShortDateFormat);
+        Assert.Equal(ThemeMode.Dark, settings.Theme);
+        var columns = await database.Database
+            .SqlQueryRaw<string>("SELECT name AS Value FROM pragma_table_info('AppSettings')")
+            .ToListAsync();
+        Assert.DoesNotContain("FirstDayOfWeek", columns);
+        Assert.DoesNotContain("CalendarHeaderFormat", columns);
     }
 
     [Fact]

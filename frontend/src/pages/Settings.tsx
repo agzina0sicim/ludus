@@ -181,7 +181,6 @@ function SettingsForm({
                                         ...schema.metadataLanguageFields,
                                         ...schema.indexerPolicyFields,
                                         ...schema.downloadHandlingFields,
-                                        ...schema.calendarFields,
                                         ...schema.dateDisplayFields,
                                         ...schema.appearanceFields,
                                         ...schema.languageFields,
@@ -1149,14 +1148,6 @@ function UiSettings() {
     const example = new Date('2026-11-23T17:45:00Z');
     return (
         <>
-            <SettingsForm
-                title={t('Kalender', 'Calendar')}
-                fields={schema.calendarFields}
-                hint={t(
-                    'Die Wochenansicht verwendet exakte Veröffentlichungstage; ungenaue Jahresangaben werden gesondert gekennzeichnet.',
-                    'The week view uses exact release dates; imprecise year-only dates are marked separately.',
-                )}
-            />
             <SettingsForm
                 title={t('Datumsanzeige', 'Date display')}
                 fields={schema.dateDisplayFields}
