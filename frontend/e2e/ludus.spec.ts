@@ -593,6 +593,10 @@ test('settings tiles, contextual navigation and aligned fields', async ({ page }
   await expect(page).toHaveURL(/activity\/history$/);
   await nav.getByRole('link', { name: 'Einstellungen', exact: true }).click();
   await nav.getByRole('link', { name: 'Indexer', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: /^(Indexer|Auswahl & RSS)$/ })).toHaveText([
+    'Indexer',
+    'Auswahl & RSS',
+  ]);
   const add = page.getByRole('button', { name: 'Hinzufügen', exact: true });
   await expect(add).toBeVisible();
   expect(await add.boundingBox()).toMatchObject({ x: 240, width: 290, height: 74 });
@@ -602,6 +606,13 @@ test('settings tiles, contextual navigation and aligned fields', async ({ page }
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Verwalten' }).click();
   await expect(page.getByRole('button', { name: 'Karten' })).toBeVisible();
+  await nav.getByRole('link', { name: 'Download-Clients', exact: true }).click();
+  await expect(
+    page.getByRole('heading', {
+      level: 2,
+      name: /^(Download-Clients|Completed Download Handling|Remote Path Mappings)$/,
+    }),
+  ).toHaveText(['Download-Clients', 'Completed Download Handling', 'Remote Path Mappings']);
   await nav.getByRole('link', { name: 'Allgemein & Sicherheit' }).click();
   const field = page.getByLabel('Instanzname', { exact: true });
   const fieldLabel = page.getByText('Instanzname', { exact: true });

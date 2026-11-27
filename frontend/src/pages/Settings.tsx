@@ -224,13 +224,8 @@ function Indexers() {
     const { t } = useLocale();
     return (
         <>
-            <SettingsForm title={t('Auswahl & RSS', 'Selection & RSS')} fields={schema.indexerPolicyFields} />
             <CrudSection
                 title={t('Indexer', 'Indexers')}
-                description={t(
-                    'Prowlarr, Jackett und Newznab. Neue Einstellungen vor dem Test speichern. Newznab verwendet Usenet.',
-                    'Prowlarr, Jackett, and Newznab. Save changes before testing. Newznab uses Usenet.',
-                )}
                 cards
                 endpoint="indexers"
                 fields={schema.indexerFields}
@@ -243,6 +238,7 @@ function Indexers() {
                 ]}
                 testEndpoint={(row) => `indexers/${row.id}/test`}
             />
+            <SettingsForm title={t('Auswahl & RSS', 'Selection & RSS')} fields={schema.indexerPolicyFields} />
         </>
     );
 }
@@ -250,20 +246,8 @@ function Clients() {
     const { t } = useLocale();
     return (
         <>
-            <SettingsForm
-                title="Completed Download Handling"
-                fields={schema.downloadHandlingFields}
-                hint={t(
-                    'Bei deaktiviertem automatischem Import bleiben Statusanzeige und manueller Import in der Warteschlange verfügbar.',
-                    'When automatic import is disabled, status and manual import remain available in the queue.',
-                )}
-            />
             <CrudSection
                 title={t('Download-Clients', 'Download clients')}
-                description={t(
-                    'Ludus verarbeitet ausschließlich die Kategorie ludus. Neue Einstellungen vor dem Test speichern.',
-                    'Ludus only processes the ludus category. Save changes before testing.',
-                )}
                 cards
                 endpoint="download-clients"
                 fields={schema.clientFields}
@@ -276,12 +260,9 @@ function Clients() {
                 ]}
                 testEndpoint={(row) => `download-clients/${row.id}/test`}
             />
+            <SettingsForm title="Completed Download Handling" fields={schema.downloadHandlingFields} />
             <CrudSection
                 title="Remote Path Mappings"
-                description={t(
-                    'Übersetzt die vom Download-Client gemeldeten Pfade in lokal erreichbare Pfade.',
-                    'Translates paths reported by the download client into locally accessible paths.',
-                )}
                 endpoint="remote-path-mappings"
                 fields={schema.mappingFields}
                 defaults={{ host: '', remotePath: '', localPath: '' }}
