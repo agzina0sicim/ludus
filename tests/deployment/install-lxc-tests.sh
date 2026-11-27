@@ -68,8 +68,13 @@ run_case() {
         build-environment)
             node_dir=/opt/ludus/tools/node-test
             local command_log="$1/build-environment"
-            runuser() { printf '%s\n' "$@" > "$command_log"; }
+            exec 9>"$1/install.lock"
+            runuser() {
+                [[ ! -e /proc/self/fd/9 ]] || die 'Build inherited the installer lock.'
+                printf '%s\n' "$@" > "$command_log"
+            }
             run_build_command "$1/build" dotnet --version
+            [[ -e /proc/self/fd/9 ]] || die 'Installer lost its lock descriptor.'
             assert_line 'ludus-build' "$command_log"
             assert_line "HOME=$1/build/home" "$command_log"
             assert_line "DOTNET_CLI_HOME=$1/build/dotnet" "$command_log"

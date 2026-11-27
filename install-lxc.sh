@@ -222,12 +222,13 @@ prepare_storage() {
 run_build_command() {
     local build_dir=$1
     shift
+    # Compiler servers may outlive this installer. Keep its flock in the parent.
     runuser -u ludus-build -- env PATH="$node_dir/bin:/usr/bin:/bin" \
         HOME="$build_dir/home" DOTNET_CLI_HOME="$build_dir/dotnet" TMPDIR="$build_dir/tmp" \
         XDG_RUNTIME_DIR="$build_dir/runtime" XDG_CONFIG_HOME="$build_dir/home/.config" \
         XDG_DATA_HOME="$build_dir/home/.local/share" XDG_CACHE_HOME="$build_dir/cache" \
         NUGET_PACKAGES="$build_dir/cache/nuget" npm_config_cache="$build_dir/cache/npm" \
-        DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 "$@"
+        DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 "$@" 9>&-
 }
 
 build_release() {
