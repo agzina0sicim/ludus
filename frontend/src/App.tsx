@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Gamepad2, ShieldCheck, X } from 'lucide-react';
+import { Gamepad2, X } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, login, resetCsrf } from './api';
 import { useResource } from './hooks';
@@ -117,77 +117,49 @@ function Login({ onLogin }: { onLogin: () => void }) {
     const [error, setError] = useState<unknown>();
     return (
         <div className="login-screen">
-            <div className="login-decoration" aria-hidden="true">
-                <div className="cartridge">
-                    <Gamepad2 size={90} strokeWidth={1} />
-                    <span>LUDUS</span>
-                    <span className="cartridge-lines" />
-                </div>
-                <p>
-                    {t('DEINE SPIELE.', 'YOUR GAMES.')}
-                    <br />
-                    {t('DEINE SAMMLUNG.', 'YOUR COLLECTION.')}
-                </p>
-            </div>
             <main className="login-panel">
-                <div className="login-top">
-                    <Brand />
-                    <LanguageSwitch />
-                </div>
-                <div className="login-content">
-                    <p className="eyebrow">{t('DEINE RETRO-BIBLIOTHEK', 'YOUR RETRO LIBRARY')}</p>
-                    <h1>{t('Willkommen zurück.', 'Welcome back.')}</h1>
-                    <p className="muted">
-                        {t('Ein Zuhause für deine Spielesammlung.', 'A home for your game collection.')}
-                    </p>
-                    <form
-                        onSubmit={async (event) => {
-                            event.preventDefault();
-                            setBusy(true);
-                            setError(undefined);
-                            try {
-                                await login({ username, password });
-                                setPassword('');
-                                onLogin();
-                            } catch (err) {
-                                setError(err);
-                            } finally {
-                                setBusy(false);
-                            }
-                        }}
-                    >
-                        <Field label={t('Benutzername', 'Username')}>
-                            <input
-                                autoComplete="username"
-                                required
-                                maxLength={128}
-                                value={username}
-                                onChange={(event) => setUsername(event.target.value)}
-                            />
-                        </Field>
-                        <Field label={t('Passwort', 'Password')}>
-                            <input
-                                type="password"
-                                autoComplete="current-password"
-                                required
-                                maxLength={1024}
-                                value={password}
-                                onChange={(event) => setPassword(event.target.value)}
-                            />
-                        </Field>
-                        <ErrorBox error={error} />
-                        <Button type="submit" variant="primary" className="full" busy={busy}>
-                            {t('Anmelden', 'Sign in')}
-                        </Button>
-                    </form>
-                    <p className="login-foot">
-                        <ShieldCheck size={17} />
-                        {t(
-                            'Privat gehostet. Deine Sammlung bleibt bei dir.',
-                            'Self-hosted. Your collection stays yours.',
-                        )}
-                    </p>
-                </div>
+                <form
+                    className="login-content"
+                    aria-label={t('Anmelden', 'Sign in')}
+                    onSubmit={async (event) => {
+                        event.preventDefault();
+                        setBusy(true);
+                        setError(undefined);
+                        try {
+                            await login({ username, password });
+                            setPassword('');
+                            onLogin();
+                        } catch (err) {
+                            setError(err);
+                        } finally {
+                            setBusy(false);
+                        }
+                    }}
+                >
+                    <Field label={t('Benutzername', 'Username')}>
+                        <input
+                            autoComplete="username"
+                            required
+                            maxLength={128}
+                            value={username}
+                            onChange={(event) => setUsername(event.target.value)}
+                        />
+                    </Field>
+                    <Field label={t('Passwort', 'Password')}>
+                        <input
+                            type="password"
+                            autoComplete="current-password"
+                            required
+                            maxLength={1024}
+                            value={password}
+                            onChange={(event) => setPassword(event.target.value)}
+                        />
+                    </Field>
+                    <ErrorBox error={error} />
+                    <Button type="submit" variant="primary" className="full" busy={busy}>
+                        {t('Anmelden', 'Sign in')}
+                    </Button>
+                </form>
             </main>
         </div>
     );

@@ -28,7 +28,7 @@ async function authorized(request: APIRequestContext, path: string, method = 'GE
 async function signIn(page: Page) {
   await page.goto('/');
   const setup = page.getByRole('heading', { name: 'Administratorkonto einrichten', exact: true });
-  const login = page.getByRole('heading', { name: 'Willkommen zurück.', exact: true });
+  const login = page.getByRole('form', { name: 'Anmelden', exact: true });
   await expect(setup.or(login)).toBeVisible();
   if (await setup.isVisible().catch(() => false)) {
     await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
@@ -349,7 +349,7 @@ test('backup download/import and API key rotation preserve a usable browser sess
   expect(rotated.ok()).toBeTruthy();
   key = (await rotated.json()).apiKey;
   if (directory) await writeFile(join(directory, 'e2e-api-key'), key, { mode: 0o600 });
-  await expect(page.getByRole('heading', { name: 'Willkommen zurück.', exact: true })).toBeVisible();
+  await expect(page.getByRole('form', { name: 'Anmelden', exact: true })).toBeVisible();
   await signIn(page);
   const diagnosticsPromise = page.waitForEvent('download');
   await page.goto('/system/logs');
@@ -437,7 +437,7 @@ test('security changes end the old session and forms login uses the updated conf
     await page.getByLabel('Neues Passwort (leer = unverändert)', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Sicherheitseinstellungen speichern', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Bestätigen', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Willkommen zurück.', exact: true })).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Anmelden', exact: true })).toBeVisible();
     await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
     await page.getByLabel('Passwort', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
