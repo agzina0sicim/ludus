@@ -2,6 +2,7 @@
 set -eu
 
 application_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+cd -- "$application_dir"
 if [ -r /etc/ludus/ludus.env ]; then
     set -a
     # shellcheck disable=SC1091
