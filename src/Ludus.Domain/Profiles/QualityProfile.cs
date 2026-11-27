@@ -5,6 +5,8 @@ namespace Ludus.Domain.Profiles;
 public sealed class QualityProfile : Entity
 {
     public required string Name { get; set; }
+    public long PlatformId { get; set; }
+    public Ludus.Domain.Library.Platform Platform { get; set; } = null!;
     public int MinimumScore { get; set; }
     public bool AllowUpgrades { get; set; } = true;
     public int UpgradeUntilScore { get; set; } = 100;

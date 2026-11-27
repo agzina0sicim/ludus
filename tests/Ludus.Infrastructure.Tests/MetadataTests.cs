@@ -35,7 +35,7 @@ public sealed class MetadataTests
             Assert.Contains("platforms = (18)", await request.Content!.ReadAsStringAsync());
             if (gameCalls == 1) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
             Assert.Equal("token-2", request.Headers.Authorization!.Parameter);
-            return Json("""[{"id":42,"name":"Example","summary":"Description","first_release_date":788918400,"platforms":[18],"cover":{"image_id":"co123"},"genres":[{"name":"Action"}],"involved_companies":[{"developer":true,"company":{"name":"Studio"}}]}]""");
+            return Json("""[{"id":42,"name":"Example","summary":"Description","first_release_date":788918400,"platforms":[18],"cover":{"image_id":"co123"},"genres":[{"name":"Action"}],"game_localizations":[{"name":"Beispiel","region":{"identifier":"germany"}},{"name":"Example UK","region":{"identifier":"united_kingdom"}}],"involved_companies":[{"developer":true,"company":{"name":"Studio"}}]}]""");
         });
         await using var fixture = new TestDatabase(services => services.AddSingleton<IHttpClientFactory>(new DownloadClientTests.Factory(handler)));
         await fixture.InitializeAsync();
@@ -47,7 +47,9 @@ public sealed class MetadataTests
         await database.SaveChangesAsync();
         var service = scope.ServiceProvider.GetRequiredService<MetadataService>();
         var result = Assert.Single(await service.SearchAsync("Example", platform.Id, MetadataProviderKind.Igdb, default));
-        Assert.Equal(1995, result.Year); Assert.Equal("Studio", result.Developer);
+        Assert.Equal("Beispiel", result.Title); Assert.Equal(1995, result.Year); Assert.Equal("Studio", result.Developer);
+        var german = result.Translations!.Single(x => x.Language == "de");
+        Assert.Equal("de", german.TitleLanguage); Assert.Null(german.DescriptionLanguage); Assert.Equal("Description", german.Description);
         Assert.NotNull(result.CoverRelativePath); Assert.Null(result.RemoteCoverUrl);
         Assert.True(File.Exists(Path.Combine(fixture.Paths.MediaDirectory, result.CoverRelativePath)));
         await service.SearchAsync("Example", platform.Id, MetadataProviderKind.Igdb, default);
@@ -80,6 +82,11 @@ public sealed class MetadataTests
         var game = Assert.Single(await scope.ServiceProvider.GetRequiredService<MetadataService>().SearchAsync("Example", platform.Id, null, default));
         Assert.Equal(MetadataProviderKind.ScreenScraper, game.Provider); Assert.Equal("European Title", game.Title); Assert.Equal("Deutsch", game.Description);
         Assert.Equal(1992, game.Year); Assert.Contains("Platform", game.Genres);
+        var translations = game.Translations!;
+        var german = translations.Single(x => x.Language == "de");
+        Assert.Null(german.TitleLanguage); Assert.Equal("de", german.DescriptionLanguage);
+        var english = translations.Single(x => x.Language == "en");
+        Assert.Equal("US Title", english.Title); Assert.Equal("en", english.TitleLanguage); Assert.Equal("en", english.DescriptionLanguage);
     }
 
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK) { Content = new StringContent(value) };

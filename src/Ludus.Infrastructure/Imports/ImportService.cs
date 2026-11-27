@@ -6,6 +6,7 @@ using Ludus.Application.Profiles;
 using Ludus.Domain.Activity;
 using Ludus.Domain.Common;
 using Ludus.Domain.Library;
+using Ludus.Domain.Configuration;
 using Ludus.Infrastructure.Configuration;
 using Ludus.Infrastructure.Notifications;
 using Ludus.Infrastructure.Persistence;
@@ -18,7 +19,7 @@ public sealed class ImportGate : IDisposable
     public SemaphoreSlim Semaphore { get; } = new(1, 1);
     public void Dispose() => Semaphore.Dispose();
 }
-public sealed record ImportFile(GameFile File, string StageRelative);
+public sealed record ImportFile(GameFile File, string StageRelative, bool Hardlinked = false);
 public sealed record RecycledFile(long Id, string RelativePath, string RecycleRelative, string Sha1);
 public sealed record ImportJournal(long DownloadId, long GameId, string Root, string Stage, string RecyclingRoot,
     IReadOnlyList<ImportFile> Files, IReadOnlyList<RecycledFile> OldFiles, bool Upgrade);
@@ -77,8 +78,9 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
         }
         if (download.Status != DownloadStatus.Imported)
         {
+            var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
             await events.PublishAsync("importStatus", new { downloadId, gameId = download.GameId, status = "Importing" }, cancellationToken);
-            await ApplyFilesAsync(journal, cancellationToken);
+            await ApplyFilesAsync(journal, settings, cancellationToken);
             await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
             var oldIds = journal.OldFiles.Select(x => x.Id).ToArray();
             database.GameFiles.RemoveRange(download.Game.Files.Where(x => oldIds.Contains(x.Id)));
@@ -121,7 +123,7 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
             throw new ImportException("OverlappingDownloadAndLibrary", false);
         var stagingRoot = Path.Combine(game.RootFolder.Path, ".ludus-staging");
         var stage = SafePaths.Within(stagingRoot, Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(stage);
+        MediaPermissions.CreateDirectory(stage, settings);
         try
         {
             var content = resolved.Path;
@@ -134,7 +136,8 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
                     var extracted = SafePaths.Within(stage, "extracted");
                     foreach (var archive in archives) await extractor.ExtractAsync(archive, extracted, settings, cancellationToken);
                     foreach (var source in sourceFiles.Except(archives))
-                        await files.StageAsync(source, SafePaths.Within(extracted, Path.GetRelativePath(content, source)), settings.PreferHardlinks, cancellationToken);
+                        await files.StageAsync(source, SafePaths.Within(extracted, Path.GetRelativePath(content, source)), settings.PreferHardlinks, cancellationToken,
+                            settings.SkipFreeSpaceCheck, settings.MinimumFreeSpaceBytes);
                     content = extracted;
                 }
             }
@@ -144,7 +147,8 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
             {
                 var stagedRelative = "files/" + prepared.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var staged = SafePaths.Within(stage, stagedRelative);
-                await files.StageAsync(source.Source, staged, settings.PreferHardlinks, cancellationToken);
+                var hardlinked = await files.StageAsync(source.Source, staged, settings.PreferHardlinks, cancellationToken,
+                    settings.SkipFreeSpaceCheck, settings.MinimumFreeSpaceBytes);
                 var hashes = await HashAsync(staged, cancellationToken);
                 if (hashes.Size == 0 && source.Role is FileRole.Rom or FileRole.Descriptor) throw new ImportException("EmptyRom", true);
                 var verification = await verifier.VerifyAsync(game.PlatformId, hashes, cancellationToken: cancellationToken);
@@ -168,7 +172,7 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
                     TitleId = parsed.SwitchIdentity?.TitleId, Revision = parsed.Revision, Regions = parsed.Regions.ToList(), Languages = parsed.Languages.ToList(),
                     VerificationStatus = verification.Status, DatRomId = verification.Matches.Count == 1 ? verification.Matches[0].DatRomId : null,
                     ImportedAtUtc = DateTime.UtcNow, LastVerifiedAtUtc = DateTime.UtcNow, LastSeenAtUtc = DateTime.UtcNow
-                }, stagedRelative));
+                }, stagedRelative, hardlinked));
             }
             var old = game.Files.Where(existing => existing.Role != FileRole.Playlist && prepared.Any(incoming => Replaces(incoming.File, existing))).ToList();
             await AddPlaylistAsync(game, stage, prepared, old, cancellationToken);
@@ -223,7 +227,7 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
         old.AddRange(game.Files.Where(x => x.Role == FileRole.Playlist && x.RelativePath == relative));
     }
 
-    private async Task ApplyFilesAsync(ImportJournal journal, CancellationToken cancellationToken)
+    private async Task ApplyFilesAsync(ImportJournal journal, AppSettings settings, CancellationToken cancellationToken)
     {
         foreach (var old in journal.OldFiles)
         {
@@ -248,8 +252,11 @@ public sealed class ImportService(IDbContextFactory<AppDbContext> databaseFactor
             {
                 if (File.Exists(target)) throw new ImportException("DestinationChanged", false);
                 if ((await HashAsync(staged, cancellationToken)).Sha1 != item.File.Sha1) throw new ImportException("StagedFileChanged", false);
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                var directory = Path.GetDirectoryName(target)!;
+                var createDirectory = !Directory.Exists(directory);
+                if (createDirectory) MediaPermissions.CreateDirectory(directory, settings);
                 File.Move(staged, target, false);
+                MediaPermissions.ApplyFile(target, settings, item.Hardlinked);
             }
             if (!File.Exists(target) || (await HashAsync(target, cancellationToken)).Sha1 != item.File.Sha1) throw new ImportException("PublishedFileChanged", false);
         }

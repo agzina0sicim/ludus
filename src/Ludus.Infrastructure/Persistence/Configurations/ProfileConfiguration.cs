@@ -9,7 +9,8 @@ public sealed class ProfileConfiguration : IEntityTypeConfiguration<QualityProfi
 {
     public void Configure(EntityTypeBuilder<QualityProfile> entity)
     {
-        entity.HasIndex(x => x.Name).IsUnique();
+        entity.HasIndex(x => new { x.PlatformId, x.Name }).IsUnique();
+        entity.HasOne(x => x.Platform).WithMany().HasForeignKey(x => x.PlatformId).OnDelete(DeleteBehavior.Restrict);
         entity.JsonList(x => x.AllowedRegions);
         entity.JsonList(x => x.ExcludedRegions);
         entity.Check("Cutoff", "\"UpgradeUntilScore\" >= \"MinimumScore\"");

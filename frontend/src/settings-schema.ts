@@ -125,8 +125,11 @@ export const providerFields = [
 ];
 export const webhookFields = [
   text('name', 'Name', 'Name'),
+  select('kind', 'Verbindungstyp', 'Connection type', ['Discord', 'Gotify', 'Telegram', 'Generic']),
   secret('url', 'Webhook-URL', 'Webhook URL'),
   secret('authorization', 'Authorization-Header (optional)', 'Authorization header (optional)'),
+  secret('token', 'Token (Gotify/Telegram)', 'Token (Gotify/Telegram)'),
+  field('target', 'Ziel / Telegram-Chat-ID', 'Target / Telegram chat ID', { maxLength: 512 }),
   toggle('enabled', 'Aktiviert', 'Enabled'),
 ];
 export const profileFields = [
@@ -157,6 +160,30 @@ export const mediaFields = [
   toggle('useCanonicalDatNames', 'Kanonische DAT-Namen verwenden', 'Use canonical DAT names'),
   toggle('preferHardlinks', 'Hardlinks bevorzugen', 'Prefer hardlinks'),
   toggle('renameFiles', 'Dateien umbenennen', 'Rename files'),
+  toggle('createEmptyFolders', 'Leere Spielordner erstellen', 'Create empty game folders'),
+  toggle('deleteEmptyFolders', 'Leere verwaltete Spielordner löschen', 'Delete empty managed game folders'),
+  toggle('skipFreeSpaceCheck', 'Freiplatzprüfung überspringen', 'Skip free space check'),
+  field('minimumFreeSpaceBytes', 'Minimaler Restfreiraum (Bytes)', 'Minimum free space (bytes)', {
+    type: 'number',
+    required: true,
+    min: 0,
+    max: Number.MAX_SAFE_INTEGER,
+    hint: [
+      '0 erlaubt ein vollständig gefülltes Ziel; Hardlinks benötigen keinen zusätzlichen Dateiinhalts-Speicher.',
+      '0 allows the target to be filled completely; hardlinks need no additional file-content space.',
+    ],
+  }),
+  field('filePermissions', 'Dateirechte (oktale Form)', 'File permissions (octal)', {
+    required: true,
+    pattern: '0[0-7]{3}',
+    maxLength: 4,
+  }),
+  field('directoryPermissions', 'Ordnerrechte (oktale Form)', 'Directory permissions (octal)', {
+    required: true,
+    pattern: '0[0-7]{3}',
+    maxLength: 4,
+  }),
+  field('mediaGroup', 'Optionale Mediengruppe', 'Optional media group', { maxLength: 128 }),
   text('recyclingBinPath', 'Papierkorb-Pfad', 'Recycling bin path', 4096),
   number('recyclingRetentionDays', 'Papierkorb-Aufbewahrung (Tage)', 'Recycling retention (days)', 1, 3650),
   number('maximumArchiveEntries', 'Maximale Archiveinträge', 'Maximum archive entries', 1, 1000000),
@@ -164,8 +191,6 @@ export const mediaFields = [
 ];
 export const generalFields = [
   text('instanceName', 'Instanzname', 'Instance name'),
-  select('language', 'Standardsprache', 'Default language', ['de', 'en']),
-  number('rssIntervalMinutes', 'RSS-Intervall (Minuten)', 'RSS interval (minutes)', 1, 1440),
   number(
     'downloadRefreshIntervalSeconds',
     'Download-Intervall (Sekunden)',
@@ -185,9 +210,86 @@ export const generalFields = [
     3600,
   ),
 ];
+export const metadataLanguageFields = [
+  select('metadataLanguage', 'Bevorzugte Metadatensprache', 'Preferred metadata language', [
+    'de',
+    'en',
+    'fr',
+    'es',
+    'it',
+    'pt',
+  ]),
+];
+export const indexerPolicyFields = [
+  field('minimumAgeMinutes', 'Mindestalter (Minuten)', 'Minimum age (minutes)', {
+    type: 'number',
+    required: true,
+    min: 0,
+    max: 10080,
+    hint: [
+      '0 deaktiviert die Regel. Sie gilt für Usenet mit bekanntem Veröffentlichungszeitpunkt; fehlende Zeitangaben werden nicht abgelehnt.',
+      '0 disables the rule. It applies to Usenet with a known publish time; missing timestamps are not rejected.',
+    ],
+  }),
+  field('maximumIndexerSizeBytes', 'Maximale Größe (Bytes)', 'Maximum size (bytes)', {
+    type: 'number',
+    required: true,
+    min: 0,
+    max: Number.MAX_SAFE_INTEGER,
+    hint: ['0 bedeutet unbegrenzt.', '0 means unlimited.'],
+  }),
+  number('rssIntervalMinutes', 'RSS-Synchronisierung (Minuten)', 'RSS sync interval (minutes)', 1, 1440),
+];
+export const downloadHandlingFields = [
+  toggle(
+    'enableCompletedDownloadHandling',
+    'Completed Download Handling aktivieren',
+    'Enable completed download handling',
+  ),
+  toggle(
+    'redownloadFailed',
+    'Fehlgeschlagene automatische Downloads erneut suchen',
+    'Redownload failed automatic grabs',
+  ),
+  toggle(
+    'redownloadFailedFromInteractiveSearch',
+    'Fehlgeschlagene interaktive Downloads erneut suchen',
+    'Redownload failed interactive grabs',
+  ),
+];
+export const calendarFields = [
+  field(
+    'firstDayOfWeek',
+    'Erster Wochentag (0 = Sonntag, 1 = Montag)',
+    'First day of week (0 = Sunday, 1 = Monday)',
+    { type: 'number', required: true, min: 0, max: 6 },
+  ),
+  select('calendarHeaderFormat', 'Spaltenüberschrift', 'Column heading', [
+    'ShortWeekday',
+    'ShortWeekdayDate',
+    'LongWeekday',
+  ]),
+];
+export const dateDisplayFields = [
+  select('shortDateFormat', 'Kurzes Datumsformat', 'Short date format', [
+    'dd.MM.yyyy',
+    'yyyy-MM-dd',
+    'MM/dd/yyyy',
+  ]),
+  select('longDateFormat', 'Langes Datumsformat', 'Long date format', [
+    'dddd, d. MMMM yyyy',
+    'd. MMMM yyyy',
+    'MMMM d, yyyy',
+  ]),
+  toggle('use12HourTime', '12-Stunden-Zeitformat', '12-hour time format'),
+];
+export const appearanceFields = [select('theme', 'Darstellung', 'Appearance', ['Light', 'Dark', 'Auto'])];
+export const languageFields = [
+  select('language', 'Sprache der Oberfläche', 'Interface language', ['de', 'en']),
+];
 export const securityFields = [
-  toggle('formsAuthenticationEnabled', 'Benutzeranmeldung aktivieren', 'Enable account login'),
-  field('username', 'Benutzername', 'Username', { maxLength: 128 }),
+  select('authenticationMethod', 'Anmeldemethode', 'Authentication method', ['Forms', 'Basic']),
+  field('username', 'Benutzername', 'Username', { required: true, maxLength: 128 }),
   toggle('trustForwardedHeaders', 'Proxy-Header vertrauen', 'Trust proxy headers'),
   number('forwardLimit', 'Maximale Proxy-Hops', 'Maximum proxy hops', 1, 10),
   list('trustedProxyNetworks', 'Vertrauenswürdige private CIDR-Netze', 'Trusted private CIDR networks'),

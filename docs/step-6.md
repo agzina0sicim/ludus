@@ -16,14 +16,15 @@
 
 Die [README](../README.md) beschreibt Docker Compose, Proxmox-UID-Mapping und Bind Mounts, Installation, Ersteinrichtung, Prowlarr/Jackett, Download-Clients, Remote Path Mappings, Hardlink-Prüfung, Reverse Proxy, Backups, Updates und Fehlerdiagnose.
 
-## Prüfung vom 25.11.2026
+## Prüfung vom 27.11.2026
 
 | Prüfung | Ergebnis |
 | --- | --- |
 | .NET Release-Build | Erfolgreich, keine Warnungen oder Fehler |
-| Backend-Tests | 132 bestanden |
+| Backend-Tests | 146 bestanden |
 | TypeScript-/Vite-Produktionsbuild | Erfolgreich |
 | Frontend-Tests | 12 bestanden |
+| Browser-Abläufe | 8 bestanden |
 | EF-Modell gegen letzte Migration | Keine ausstehenden Änderungen |
 | Bash-Syntax und Installer-Hilfe | Erfolgreich |
 | Installer-Tests | 56 Prüfungen bestanden |
@@ -31,4 +32,4 @@ Die [README](../README.md) beschreibt Docker Compose, Proxmox-UID-Mapping und Bi
 
 Die Installer-Tests prüfen Eingabegrenzen, Pfadüberlappungen, persistierte Optionen, Shell-Injection-Abwehr und die erzeugte Dienstkonfiguration. Aktivierungstests ersetzen Hostbefehle und prüfen erfolgreichen Start, belegten Port, fehlgeschlagenen Healthcheck sowie Fehler bei Unit-Prüfung und Dienstaktivierung. Sie installieren keine Pakete und verändern weder `/etc` noch `/opt`.
 
-Die Shellprüfungen liefen unter GNU Bash in der Windows-Entwicklungsumgebung. Ein tatsächlicher Linux-/Proxmox-Installationslauf, eine echte systemd-Unit-Aktivierung und ein Docker-Image-Build wurden hier nicht durchgeführt. Die vier erfolgreichen Browser-Abläufe aus Schritt 5 wurden für diese Änderungen an Installer und Dokumentation nicht erneut ausgeführt. Externe Clients und Provider benötigen eine separate Prüfung mit den jeweiligen Zugangsdaten.
+Die Shellprüfungen liefen unter GNU Bash in der Windows-Entwicklungsumgebung. Ein tatsächlicher Linux-/Proxmox-Installationslauf, eine echte systemd-Unit-Aktivierung und ein Docker-Image-Build wurden hier nicht durchgeführt. Die acht Browser-Abläufe wurden gegen eine isolierte Produktionsinstanz mit eigener temporärer Konfiguration und Bibliothek ausgeführt. Externe Clients, Provider und Benachrichtigungsdienste benötigen eine separate Prüfung mit den jeweiligen Zugangsdaten.

@@ -5,13 +5,15 @@ namespace Ludus.Infrastructure.Imports;
 
 public sealed class AtomicFiles
 {
-    public async Task<bool> StageAsync(string source, string target, bool preferHardlinks, CancellationToken cancellationToken)
+    public async Task<bool> StageAsync(string source, string target, bool preferHardlinks, CancellationToken cancellationToken,
+        bool skipFreeSpaceCheck = true, long minimumFreeSpaceBytes = 0)
     {
         SafePaths.RejectLinks(source);
         SafePaths.RejectLinks(target);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         if (File.Exists(target)) throw new ImportException("DestinationExists", false);
         if (preferHardlinks && TryHardLink(source, target)) return true;
+        FreeSpace.EnsureAvailable(target, new FileInfo(source).Length, minimumFreeSpaceBytes, skipFreeSpaceCheck);
         await CopyAsync(source, target, cancellationToken);
         return false;
     }

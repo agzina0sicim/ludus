@@ -1,6 +1,13 @@
 namespace Ludus.Domain.Common;
 
 public enum MetadataProviderKind { Igdb, ScreenScraper }
+public enum AuthenticationMethod { Forms, Basic }
+public enum AccountSetupMode { NewInstance, LegacyProtected, Complete }
+public enum GrabOrigin { Automatic, Interactive }
+public enum WebhookKind { Discord, Gotify, Telegram, Generic }
+public enum ThemeMode { Light, Dark, Auto }
+public enum CalendarHeaderFormat { ShortWeekday, ShortWeekdayDate, LongWeekday }
+public enum ReleaseDatePrecision { Exact, Month, Year }
 public enum ContentKind { Base, Update, Dlc }
 public enum GameStatus { Missing, Downloading, Available }
 public enum FileRole { Rom, Descriptor, Track, Playlist, Directory, Support }
@@ -14,7 +21,7 @@ public enum FormatField { Region, Language, Extension, ReleaseTitle, Revision, S
 public enum FormatOperator { Equals, Contains, Regex, GreaterThanOrEqual }
 public enum FormatMatchMode { All, Any }
 public enum HistoryEvent { Grabbed, Imported, Upgraded, DownloadFailed, Deleted, Renamed, Verified, ScanMatched }
-public enum NotificationEvent { Grabbed, Imported, Upgraded, DownloadFailed }
+public enum NotificationEvent { Grabbed, Imported, ImportFailed, Upgraded, DownloadFailed }
 public enum TaskKind { RssSync, DownloadRefresh, LibraryScan, HealthCheck, Backup, RecyclingCleanup }
 public enum TaskRunStatus { Running, Succeeded, Failed, Interrupted }
 public enum HealthSeverity { Warning, Error }

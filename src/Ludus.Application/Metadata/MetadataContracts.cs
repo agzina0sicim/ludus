@@ -4,9 +4,13 @@ using Ludus.Domain.Library;
 
 namespace Ludus.Application.Metadata;
 
+public sealed record MetadataTranslation(string Language, string? Title, string? Description,
+    string? TitleLanguage, string? DescriptionLanguage);
 public sealed record MetadataGame(MetadataProviderKind Provider, string ExternalId, string Title, string? Description, int? Year,
     string? Developer, string? Publisher, IReadOnlyList<string> Genres, IReadOnlyList<int> PlatformIds,
-    string? CoverRelativePath = null, [property: JsonIgnore] string? RemoteCoverUrl = null);
+    string? CoverRelativePath = null, [property: JsonIgnore] string? RemoteCoverUrl = null,
+    DateTime? ReleaseDateUtc = null, ReleaseDatePrecision? ReleaseDatePrecision = null,
+    IReadOnlyList<MetadataTranslation>? Translations = null);
 public sealed record MetadataSystem(int Id, string Name);
 public sealed class MetadataException(string code) : Exception($"Metadata request failed: {code}.") { public string Code { get; } = code; }
 public interface IMetadataProvider

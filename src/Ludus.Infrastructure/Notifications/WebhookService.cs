@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Ludus.Application.Downloads;
 using Ludus.Domain.Activity;
 using Ludus.Domain.Common;
@@ -50,14 +51,29 @@ public sealed class WebhookService(IDbContextFactory<AppDbContext> databaseFacto
         var url = http.Secret(webhook.Url);
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0)
             throw new DownloadClientException("InvalidWebhookUrl");
-        using var request = new HttpRequestMessage(HttpMethod.Post, uri)
+        var timestamp = DateTime.UtcNow;
+        object payload;
+        if (webhook.Kind == WebhookKind.Discord)
+            payload = new { username = "Ludus", allowed_mentions = new { parse = Array.Empty<string>() },
+                embeds = new[] { new { title = Limit($"{eventName}: {title}", 256), description = Limit(release ?? "", 2048), timestamp } } };
+        else if (webhook.Kind == WebhookKind.Gotify)
         {
-            Content = JsonContent.Create(new
-            {
-                username = "Ludus", allowed_mentions = new { parse = Array.Empty<string>() },
-                embeds = new[] { new { title = Limit($"{eventName}: {title}", 256), description = Limit(release ?? "", 2048), timestamp = DateTime.UtcNow } }
-            })
-        };
+            if (webhook.Token is null) throw new DownloadClientException("WebhookTokenRequired");
+            var builder = new UriBuilder(uri) { Path = uri.AbsolutePath.TrimEnd('/') + "/message",
+                Query = "token=" + Uri.EscapeDataString(http.Secret(webhook.Token)) };
+            uri = builder.Uri;
+            payload = new { title = Limit($"Ludus: {eventName}", 200), message = Limit(release is null ? title : $"{title}\n{release}", 4000), priority = 5 };
+        }
+        else if (webhook.Kind == WebhookKind.Telegram)
+        {
+            if (webhook.Token is null || string.IsNullOrWhiteSpace(webhook.Target)) throw new DownloadClientException("WebhookTokenRequired");
+            var builder = new UriBuilder(uri) { Path = uri.AbsolutePath.TrimEnd('/') + "/bot" + Uri.EscapeDataString(http.Secret(webhook.Token)) + "/sendMessage", Query = "" };
+            uri = builder.Uri;
+            payload = new { chat_id = webhook.Target, text = Limit($"Ludus · {eventName}\n{title}{(release is null ? "" : "\n" + release)}", 4096), disable_notification = false };
+        }
+        else
+            payload = new { eventType = eventName, occurredAtUtc = timestamp, game = new { title }, release = release is null ? null : new { title = release } };
+        using var request = new HttpRequestMessage(HttpMethod.Post, uri) { Content = JsonContent.Create(payload, payload.GetType()) };
         if (webhook.Authorization is not null) request.Headers.TryAddWithoutValidation("Authorization", http.Secret(webhook.Authorization));
         using var response = await http.SendAsync(request, true, cancellationToken);
         ClientHttp.RequireSuccess(response);

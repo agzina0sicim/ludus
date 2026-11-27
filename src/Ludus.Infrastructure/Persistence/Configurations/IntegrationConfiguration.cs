@@ -48,6 +48,7 @@ public sealed class IntegrationConfiguration : IEntityTypeConfiguration<Indexer>
     public void Configure(EntityTypeBuilder<Webhook> entity)
     {
         entity.HasIndex(x => x.Name).IsUnique();
+        entity.Property(x => x.Target).HasMaxLength(512);
         entity.JsonList(x => x.Events);
     }
 }

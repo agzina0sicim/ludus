@@ -17,6 +17,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Game> Games => Set<Game>();
     public DbSet<GameFile> GameFiles => Set<GameFile>();
     public DbSet<GameMetadataReference> GameMetadataReferences => Set<GameMetadataReference>();
+    public DbSet<GameMetadataTranslation> GameMetadataTranslations => Set<GameMetadataTranslation>();
     public DbSet<DatFile> DatFiles => Set<DatFile>();
     public DbSet<DatGame> DatGames => Set<DatGame>();
     public DbSet<DatRom> DatRoms => Set<DatRom>();

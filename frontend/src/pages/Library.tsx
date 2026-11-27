@@ -3,7 +3,7 @@ import { Plus, ScanLine } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, query } from '../api';
 import { useDebounce, useResource } from '../hooks';
-import { useLocale } from '../i18n';
+import { date, useLocale } from '../i18n';
 import { Badge, Button, Cover, ErrorBox, Field, Loading, Modal, Pager, useToast } from '../ui';
 import type { Game, Page, Platform, RootFolder } from '../types';
 
@@ -225,7 +225,7 @@ function PosterGrid({
     platforms: Platform[];
     options: Options;
 }) {
-    const { t } = useLocale();
+    const { t, locale } = useLocale();
     return (
         <div className={'poster-grid poster-size-' + options.size}>
             {games.map((game) => (
@@ -252,7 +252,7 @@ function PosterGrid({
                         <p>
                             {[
                                 options.poster.platform && game.platform,
-                                options.poster.platform && game.releaseYear,
+                                options.poster.platform && releaseDate(game, locale),
                                 options.poster.monitored &&
                                     (game.monitored
                                         ? t('Überwacht', 'Monitored')
@@ -268,6 +268,7 @@ function PosterGrid({
     );
 }
 function Overview({ games, description }: { games: Game[]; description: boolean }) {
+    const { locale } = useLocale();
     return (
         <div className="library-overview">
             {games.map((game) => (
@@ -275,7 +276,7 @@ function Overview({ games, description }: { games: Game[]; description: boolean 
                     <Cover path={game.coverRelativePath} title={game.title} />
                     <div>
                         <h2>{game.title}</h2>
-                        <p>{[game.platform, game.releaseYear].filter(Boolean).join(' · ')}</p>
+                        <p>{[game.platform, releaseDate(game, locale)].filter(Boolean).join(' · ')}</p>
                         {description && game.description && <p className="clamp-3">{game.description}</p>}
                         <Badge value={game.status} />
                     </div>
@@ -285,13 +286,13 @@ function Overview({ games, description }: { games: Game[]; description: boolean 
     );
 }
 function GameTable({ games, visible }: { games: Game[]; visible: Column[] }) {
-    const { t } = useLocale();
+    const { t, locale } = useLocale();
     function cell(game: Game, column: Column) {
         switch (column) {
             case 'platform':
                 return game.platform;
             case 'year':
-                return game.releaseYear ?? '—';
+                return releaseDate(game, locale);
             case 'status':
                 return <Badge value={game.status} />;
             case 'monitored':
@@ -326,6 +327,14 @@ function GameTable({ games, visible }: { games: Game[]; visible: Column[] }) {
             </table>
         </div>
     );
+}
+function releaseDate(game: Game, locale: string) {
+    if (!game.releaseDateUtc) return game.releaseYear ?? '—';
+    if (game.releaseDatePrecision === 'Year')
+        return `≈ ${game.releaseYear ?? new Date(game.releaseDateUtc).getFullYear()}`;
+    if (game.releaseDatePrecision === 'Month')
+        return `≈ ${new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(game.releaseDateUtc))}`;
+    return date(game.releaseDateUtc, locale, 'short');
 }
 export function ScanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useLocale();

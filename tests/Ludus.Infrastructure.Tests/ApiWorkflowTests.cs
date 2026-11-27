@@ -14,13 +14,16 @@ public sealed class ApiWorkflowTests
     public async Task GamesProfilesAndPlatformMonitoringRoundTripThroughTheApi()
     {
         await using var fixture = new ApiFixture(); using var client = await fixture.AuthorizedClientAsync();
-        long platformId; long rootId; long profileId;
+        long platformId; long otherPlatformId; long rootId; long profileId;
         await using (var scope = fixture.Factory.Services.CreateAsyncScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             platformId = (await database.Platforms.SingleAsync(x => x.Slug == "nes")).Id;
+            otherPlatformId = (await database.Platforms.FirstAsync(x => x.Id != platformId)).Id;
             rootId = (await database.RootFolders.SingleAsync()).Id; profileId = (await database.QualityProfiles.SingleAsync()).Id;
         }
+        using var mismatch = await client.PostAsJsonAsync("/api/v1/games", new { title = "Wrong profile", platformId = otherPlatformId, rootFolderId = rootId, qualityProfileId = profileId, monitored = true });
+        Assert.Equal(HttpStatusCode.BadRequest, mismatch.StatusCode);
         using var created = await client.PostAsJsonAsync("/api/v1/games", new { title = "Example", platformId, rootFolderId = rootId, qualityProfileId = profileId, monitored = true });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt64();

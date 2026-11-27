@@ -6,15 +6,15 @@ ASP.NET Core und EF Core 10 bilden das Backend; SQLite läuft im WAL-Modus. Das 
 
 ## Funktionen
 
-- IGDB mit Twitch-OAuth und ScreenScraper.fr v2, lokale Cover und plattformbezogener Provider-Fallback.
+- IGDB mit Twitch-OAuth und ScreenScraper.fr v2, getrennte UI-/Metadatensprache, lokale Cover und plattformbezogener Provider-Fallback.
 - No-Intro-/Redump-Release-Parsing, PlayStation-Serials, Switch-Title-IDs und Base-/Update-/DLC-Zuordnung.
 - Logiqx-DAT-Import, CRC32/MD5/SHA1 und Verifikationsstatus.
 - Torznab/Newznab über Prowlarr, Jackett oder einen kompatiblen Indexer; RSS und interaktive Suche einschließlich Ablehnungsgründen.
-- Qualitätsprofile, Custom Formats, Mindestscore und Upgrade-Cutoff.
+- Plattformgebundene Qualitätsprofile, wiederverwendbare Custom Formats, Mindestscore und Upgrade-Cutoff.
 - qBittorrent, Transmission und SABnzbd, feste Kategorie/Label `ludus`, Remote Path Mappings und Completed Download Handling.
 - ZIP/7z, Hardlinks mit Kopier-Fallback, CUE/BIN/GDI-Sets, M3U, Ordnerspiele und Recycling Bin.
-- API-Key, Cookie-Anmeldung, CSRF-Schutz, verschlüsselte Credentials und signierte Medien-Links.
-- Health Checks, Zeitpläne, Backups/Restore, bereinigter Diagnose-Export und Discord-kompatible Webhooks.
+- Forms- oder HTTP-Basic-Anmeldung, separater API-Key für Integrationen, CSRF-Schutz, verschlüsselte Credentials und signierte Medien-Links.
+- Health Checks, Kalender, Zeitpläne, Backups/Restore, bereinigter Diagnose-Export sowie Discord-, Gotify-, Telegram- und generische Webhooks.
 
 ## Betriebsvarianten
 
@@ -194,13 +194,13 @@ Auch ein abweichender Papierkorb-Pfad benötigt Schreibfreigabe. Für Hardlinks 
 
 ## Erste Einrichtung
 
-1. Oberfläche auf Port 8080 öffnen. Den anfänglichen API-Key aus dem Konfigurationsverzeichnis übernehmen: nativ `cat /config/bootstrap-api-key`, in Docker `docker compose exec ludus cat /config/bootstrap-api-key`. Beim Hardlink-Layout die beiden `-f`-Argumente wie beim Start verwenden.
-2. Unter **Einstellungen → Allgemein & Sicherheit** optional Forms-Anmeldung aktivieren. Ein neues Passwort benötigt mindestens zwölf Zeichen. Das Speichern widerruft bestehende Sitzungen; anschließend erneut anmelden. Bei aktivierter Forms-Anmeldung wird die Bootstrap-Datei entfernt.
-3. Unter **Medienverwaltung** bestehende Root Folders hinterlegen. Der Seed legt zunächst einen Root `ROMs` für das konfigurierte ROM-Verzeichnis an. Entweder diesen gemeinsamen Root oder nicht überlappende plattformspezifische Roots verwenden. Einen ungenutzten gemeinsamen Seed-Root vor dem Einrichten seiner Unterordner als separate Roots entfernen.
-4. **Metadaten** einrichten: IGDB benötigt Twitch Client-ID und Client-Secret; ScreenScraper Entwickler-ID/-Passwort und gegebenenfalls Benutzername/-Passwort. Aktivieren, speichern und testen. Plattform-System-IDs, primären Provider und Fallback in der Plattformverwaltung prüfen.
-5. **Profile & Formate** anpassen. Das Standardprofil bevorzugt Europe (`+100`) vor USA (`+80`), bewertet CHD mit `+50` und Beta/Demo/Proto stark negativ. Cutoff ist anfangs `100`. Nach Erreichen des Cutoffs werden keine weiteren Basis-ROM-Upgrades gesucht.
-6. Indexer und Download-Client einrichten, anschließend **System → Status & Zustand** prüfen.
-7. Vorhandene ROMs über **Bibliothek scannen** aufnehmen. Bei mehrdeutigen Endungen wie `.iso` eine Plattform auswählen. Für neue Spiele Plattform, Root Folder, Profil und Monitoring festlegen.
+1. Oberfläche auf Port 8080 öffnen und das Administratorkonto mit Benutzername und einem mindestens zwölf Zeichen langen Passwort anlegen. **Forms** verwendet die Ludus-Anmeldeseite und ist der Standard. **Basic** verwendet den nativen Browserdialog und darf nur über HTTPS eingesetzt werden.
+2. Unter **Medienverwaltung** bestehende Root Folders hinterlegen. Der Seed legt zunächst einen Root `ROMs` für das konfigurierte ROM-Verzeichnis an. Entweder diesen gemeinsamen Root oder nicht überlappende plattformspezifische Roots verwenden. Einen ungenutzten gemeinsamen Seed-Root vor dem Einrichten seiner Unterordner als separate Roots entfernen.
+3. **Metadaten** einrichten: IGDB benötigt Twitch Client-ID und Client-Secret; ScreenScraper Entwickler-ID/-Passwort und gegebenenfalls Benutzername/-Passwort. Aktivieren, speichern und testen. Die bevorzugte Metadatensprache ist von der UI-Sprache unabhängig. Plattform-System-IDs, primären Provider und Fallback in der Plattformverwaltung prüfen.
+4. Unter **Custom Formats** gemeinsame Erkennungsregeln pflegen. Unter **Profile** für jede Plattform mindestens ein Profil mit eigenen Scores anlegen. Das Standardprofil bevorzugt Europe (`+100`) vor USA (`+80`), bewertet CHD mit `+50` und Beta/Demo/Proto stark negativ. Nach Erreichen des Cutoffs werden keine weiteren Basis-ROM-Upgrades gesucht.
+5. Indexer und Download-Client einrichten. Mindestalter, Maximalgröße, RSS-Intervall, Completed Download Handling und die beiden getrennten Ersatzsuche-Schalter prüfen; anschließend **System → Status & Zustand** öffnen.
+6. Unter **UI** Kalender, Datums-/Zeitformat, Theme und Oberflächensprache festlegen. Ein Wechsel der Oberflächensprache verändert die Metadatensprache nicht.
+7. Vorhandene ROMs über **Bibliothek scannen** aufnehmen. Bei mehrdeutigen Endungen wie `.iso` eine Plattform auswählen. Für neue Spiele Plattform, Root Folder, passendes Profil und Monitoring festlegen.
 
 Root Folders müssen bereits existieren und für Ludus zugänglich sein. Das Umhängen eines Spiels mit vorhandenen Dateizuordnungen ist kein automatischer Verschiebeauftrag. Ein Scan kann eindeutig verschobene vollständige Dateisätze wiederfinden; der bisherige Root muss erreichbar sein.
 
@@ -236,6 +236,8 @@ Beispielpfade im Download-Client: `/data/downloads/torrents` für Torrents und `
 
 Torrents bleiben für das Seeden erhalten. Bei aktivierter Bereinigung wartet Ludus auf die vom Adapter erkannten Seed-Ziele; erfolgreich bereinigte Aufträge löschen die Quelldateien nicht. Temporäre Tracker-/Netzwerkfehler erhalten sieben Tage Cooldown, defekte Archive permanente Sperren. Fehler durch lokale Rechte oder fehlende Mounts sollen behoben werden; sie machen ein Release nicht automatisch dauerhaft unbrauchbar.
 
+**Completed Download Handling** kann deaktiviert werden, ohne Queue und manuellen Import abzuschalten. Die Herkunft eines Grabs wird gespeichert: automatische und interaktiv gestartete Downloads verwenden getrennte Schalter für eine Ersatzsuche. Eine Ersatzsuche übernimmt Plattform und Qualitätsprofil, respektiert Blocklist/Cooldown und wählt nicht erneut dasselbe Release.
+
 ## Remote Path Mappings und Hardlinks
 
 Ein Mapping übersetzt einen vom Client gemeldeten Pfad; es bindet keinen Datenträger ein. Beispiel:
@@ -269,6 +271,29 @@ Bei Erfolg stimmen Geräte- und Inode-Nummer überein und der Link-Zähler ist `
 
 Hardlinks sind dieselbe Datei unter zwei Namen. ROM-Inhalte nach dem Import nicht an Ort und Stelle patchen, solange die Download-Kopie unverändert seeden soll.
 
+Unter **Medienverwaltung** steuern „Leere Spielordner erstellen/löschen“ ausschließlich von Ludus erfasste Spielordner innerhalb eines Root Folders. Root Folders, nicht leere Ordner, fremde Verzeichnisse und Ziele außerhalb der Bibliothek werden nie entfernt. Die Freiplatzprüfung läuft auf dem tatsächlichen Zielvolume und berücksichtigt Dateigröße plus konfigurierten Restfreiraum; ein erfolgreicher Hardlink benötigt keinen zusätzlichen Inhaltsplatz. Unix-Datei-/Ordnerrechte und eine optionale Gruppe wirken nur unter Linux. Bei Hardlinks ändert Ludus Modus und Gruppe nicht, weil Quelle und Ziel denselben Inode verwenden; ansonsten gelten konfigurierte Rechte zusammen mit der Prozess-UMASK.
+
+## Metadatensprachen
+
+Die Spieldetailseite zeigt verfügbare Fassungen und die tatsächlich verwendete Sprache getrennt für Titel und Beschreibung. Fehlende Felder fallen nachvollziehbar auf eine vorhandene Fassung zurück; ein lokalisierter Titel kann daher mit einer anderssprachigen Beschreibung kombiniert werden. Refresh und Cache behalten die übrigen Sprachfassungen.
+
+IGDB liefert über `game_localizations` lokalisierte Namen nach Region, aber keine entsprechend lokalisierten Beschreibungen. ScreenScraper liefert regiongebundene Namen sowie sprachgebundene `synopsis_*`- und Genre-Felder; die tatsächlich vorhandenen Fassungen unterscheiden sich je Spiel. Siehe [IGDB API](https://api-docs.igdb.com/index.html) und [ScreenScraper Web API v2](https://www.screenscraper.fr/webapi2.php).
+
+## Connect-Benachrichtigungen
+
+Unter **Einstellungen → Connect** können mehrere benannte Discord-Webhooks, Gotify-Instanzen, Telegram-Bots und generische HTTP-Webhooks eingerichtet werden. Pro Verbindung stehen Aktivierung, Ereignisauswahl und eine echte Testnachricht zur Verfügung. Unterstützte Ereignisse sind mindestens „an Download-Client übergeben“, „Import erfolgreich“, „Import fehlgeschlagen“ und „Download fehlgeschlagen“. Zustellfehler werden separat wiederholt und ändern keinen erfolgreichen Importstatus.
+
+Für Gotify ist die Instanz-URL plus App-Token erforderlich. Telegram verwendet die API-Basis-URL, Bot-Token und Chat-ID. Token, Webhook-URL und optionale Authorization werden verschlüsselt gespeichert und in Diagnoseausgaben bereinigt. Der generische Webhook erhält per `POST` JSON in dieser Form:
+
+```json
+{
+  "eventType": "Imported",
+  "occurredAtUtc": "2026-11-27T12:00:00Z",
+  "game": { "title": "Beispielspiel" },
+  "release": { "title": "Example.Game.Europe" }
+}
+```
+
 ## DAT-Verifikation, Importe und Benennung
 
 Unter **Einstellungen → DAT Files** eine offizielle Logiqx-XML-`.dat` der passenden Plattform hochladen. Die Upload-Grenze beträgt 256 MiB. Anschließend scannen, um vorhandene Dateien erneut zu prüfen. `[!]` kennzeichnet einen passenden DAT-Treffer; nicht passende oder unbekannte Dumps bleiben als Modified/Unverified sichtbar. Ein DAT-Status ersetzt keine Profilbewertung.
@@ -285,9 +310,11 @@ Root Folder ist die Spielzuordnung. Bei zusammengehörigen Track-/Ordner-Sets bl
 
 ## Security, Reverse Proxy und Dashboards
 
-Alle REST-Aufrufe liegen unter `/api/v1`. Externe Anwendungen senden den Key im Header `X-Api-Key`; die Browser-Oberfläche verwendet eine HttpOnly-Cookie-Session und CSRF-Header. Der Key wird unter **Allgemein & Sicherheit** angezeigt/zurückgesetzt. Ein Reset widerruft alte Sessions und signierte Medien-Links. Credentials in der Datenbank werden mit dem Keyring unter `/config/keys` verschlüsselt; dieser Ordner gehört zur persistenten Sicherung.
+Alle REST-Aufrufe liegen unter `/api/v1`. Externe Anwendungen senden weiterhin den Integrationsschlüssel im Header `X-Api-Key`; er ist kein Browser-Login. Im Modus **Forms** verwendet die Oberfläche eine HttpOnly-Cookie-Session und CSRF-Header, ohne eine Basic-Challenge auszulösen. Im Modus **Basic** sendet Ludus `WWW-Authenticate: Basic`; Browser und SignalR verwenden dieselben Administrator-Zugangsdaten. Der Key wird unter **Allgemein & Sicherheit** angezeigt/zurückgesetzt. Ein Reset widerruft alte Sessions und signierte Medien-Links. Credentials in der Datenbank werden mit dem Keyring unter `/config/keys` verschlüsselt; dieser Ordner gehört zur persistenten Sicherung.
 
 Der Reverse Proxy soll HTTPS terminieren, den ursprünglichen `Host` erhalten, `X-Forwarded-For` und `X-Forwarded-Proto` setzen und WebSockets für `/hubs/activity` weiterleiten. In Ludus nur das tatsächlich verwendete private Proxy-Netz und die passende Hop-Anzahl freigeben. Proxy-Vertrauen ersetzt keine Authentifizierung. Ein separater Hostname mit Weiterleitung ab `/` ist der vorgesehene Betrieb; ein beliebiger URL-Unterpfad ist nicht konfiguriert.
+
+Falls die Administrator-Zugangsdaten vergessen wurden, lokal im persistenten Konfigurationsverzeichnis eine leere Datei `reset-account` anlegen und Ludus neu starten. Ludus entfernt den Marker und schreibt einen einmaligen Code nach `account-setup-token` (unter Unix nur für den Besitzer lesbar). Danach im Browser ein neues Konto einrichten und die Token-Datei nicht weitergeben. Dieser Weg erfordert lokalen Dateisystemzugriff und kann daher nicht von einem anonymen Besucher ausgelöst werden.
 
 Für Homarr/Homepage eignen sich der anonyme Status-Endpunkt und authentifizierte API-Abfragen wie `/api/v1/system/info`, `/api/v1/system/health` oder `/api/v1/activity/queue`. Ein speziell für Ludus bereitgestelltes Dashboard-Widget ist nicht Teil dieses Repositories. Signierte Medien-URLs enthalten zeitlich begrenzte Zugriffstoken; Proxy-Logs sollten deren Query-Strings ebenfalls nicht dauerhaft sammeln.
 
@@ -312,6 +339,10 @@ docker compose -f docker-compose.yml -f docker-compose.hardlinks.yml ps
 ```
 
 Beim einfachen Layout die beiden `-f`-Argumente weglassen. Migrationen laufen automatisch beim App-Start. Ein älteres Image nicht ungeprüft gegen eine bereits migrierte Datenbank starten.
+
+Beim Upgrade werden vorhandene Benutzernamen und Passwort-Hashes übernommen. Eine bisher ausschließlich per API-Key geschützte Instanz erzeugt beim ersten Start lokal `/config/account-setup-token`; nur mit diesem einmaligen Code lässt sich das Administratorkonto im Browser anlegen. Bestehende `X-Api-Key`-Integrationen arbeiten während und nach diesem Übergang unverändert weiter.
+
+Globale Altprofile werden pro tatsächlich verwendeter Plattform verlustfrei dupliziert; Spiele werden dem passenden Klon zugeordnet und Custom-Format-Scores kopiert. Ein unbenutztes Profil bleibt erhalten und wird der Plattform mit der kleinsten ID zugeordnet. Nach dem Upgrade die Zuordnung dieses Profils prüfen und bei Bedarf über die Profilseite ändern. Vor dem Update wie üblich ein Backup erstellen.
 
 ### Natives Update
 
@@ -378,4 +409,4 @@ docs/                        Architektur und Implementierungsdetails
 
 Weitere Details: [Architektur](docs/architecture.md), [Parser/Scoring/Indexer](docs/step-2.md), [Download-Handling/Importe](docs/step-3.md), [API/Security/Backups](docs/step-4.md), [Frontend](docs/step-5.md), [Installer und Abschlussprüfung](docs/step-6.md).
 
-Die Abschlussprüfung vom 25.11.2026 umfasst erfolgreiche Backend- und Frontend-Builds, 132 Backend-Tests, 12 Frontend-Tests und 56 Installer-Prüfungen. Bash-Syntax, ShellCheck und EF-Modellabgleich sind erfolgreich. Vier Browser-Abläufe wurden zuvor in Schritt 5 geprüft. Live-Integrationen brauchen eigene Credentials. Ein echter Proxmox-LXC-/Linux-systemd-Installationslauf und ein Docker-Image-Build wurden in der vorhandenen Windows-Entwicklungsumgebung nicht durchgeführt.
+Die Abschlussprüfung vom 27.11.2026 umfasst erfolgreiche Backend- und Frontend-Produktionsbuilds, 146 Backend-Tests, 12 Frontend-Tests und 8 Browser-Abläufe gegen eine isolierte Produktionsinstanz. Formatprüfung und EF-Modellabgleich sind erfolgreich; die vorhandenen 56 Installer-Prüfungen bleiben unverändert. Live-Integrationen brauchen eigene Credentials. Ein echter Proxmox-LXC-/Linux-systemd-Installationslauf und ein Docker-Image-Build wurden in der vorhandenen Windows-Entwicklungsumgebung nicht durchgeführt.

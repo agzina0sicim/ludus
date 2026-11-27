@@ -7,7 +7,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 describe('API session boundaries', () => {
   beforeEach(() => resetCsrf());
-  it('refreshes the CSRF token after sign-in and never uses a key in a URL or default headers', async () => {
+  it('refreshes the CSRF token after account sign-in and never uses an API key in browser requests', async () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(json({ token: 'anonymous' }))
@@ -15,7 +15,7 @@ describe('API session boundaries', () => {
       .mockResolvedValueOnce(json({ token: 'session' }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);
-    await login({ apiKey: 'private-key' });
+    await login({ username: 'admin', password: 'private-password' });
     await api('games/1', { method: 'PUT', body: { monitored: true } });
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
       '/api/v1/auth/csrf',
@@ -27,7 +27,8 @@ describe('API session boundaries', () => {
     expect(fetch.mock.calls[3][1].headers.get('X-CSRF-Token')).toBe('session');
     expect(fetch.mock.calls[3][1].headers.has('X-Api-Key')).toBe(false);
     expect(fetch.mock.calls[3][1].credentials).toBe('same-origin');
-    expect(fetch.mock.calls[3][1].body).not.toContain('private-key');
+    expect(fetch.mock.calls[1][1].body).toContain('private-password');
+    expect(fetch.mock.calls[3][1].body).not.toContain('private-password');
   });
   it('shares CSRF initialization between concurrent writes', async () => {
     const fetch = vi.fn(async (url: string) =>

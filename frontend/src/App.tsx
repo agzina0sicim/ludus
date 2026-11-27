@@ -3,7 +3,7 @@ import { Gamepad2, ShieldCheck, X } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api, login, resetCsrf } from './api';
 import { useResource } from './hooks';
-import { useLocale } from './i18n';
+import { configureDisplaySettings, useLocale } from './i18n';
 import { ShellHeader, SidebarNavigation } from './ShellNavigation';
 import { useRealtime } from './realtime';
 import { Button, ErrorBox, Field, Loading } from './ui';
@@ -13,6 +13,7 @@ const LibraryPage = lazy(() => import('./pages/Library'));
 const AddPage = lazy(() => import('./pages/AddGame'));
 const GamePage = lazy(() => import('./pages/GameDetails'));
 const ActivityPage = lazy(() => import('./pages/Activity'));
+const CalendarPage = lazy(() => import('./pages/Calendar'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
 const SystemPage = lazy(() => import('./pages/System'));
 
@@ -56,7 +57,15 @@ export function App() {
                 </div>
             }
         >
-            {session.data.authenticated && !expired ? (
+            {session.data.setupRequired ? (
+                <AccountSetup
+                    protectedUpgrade={session.data.setupProtected}
+                    onComplete={() => {
+                        setExpired(false);
+                        session.reload();
+                    }}
+                />
+            ) : session.data.authenticated && !expired ? (
                 <Shell
                     logout={() => {
                         setExpired(true);
@@ -65,7 +74,6 @@ export function App() {
                 />
             ) : (
                 <Login
-                    forms={session.data.formsAuthenticationEnabled}
                     onLogin={() => {
                         setExpired(false);
                         session.reload();
@@ -100,15 +108,12 @@ export function LanguageSwitch() {
         </button>
     );
 }
-function Login({ forms, onLogin }: { forms: boolean; onLogin: () => void }) {
+function Login({ onLogin }: { onLogin: () => void }) {
     const { t } = useLocale();
-    const [method, setMethod] = useState(forms ? 'password' : 'key');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [apiKey, setApiKey] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<unknown>();
-    useEffect(() => setMethod(forms ? 'password' : 'key'), [forms]);
     return (
         <div className="login-screen">
             <div className="login-decoration" aria-hidden="true">
@@ -134,30 +139,14 @@ function Login({ forms, onLogin }: { forms: boolean; onLogin: () => void }) {
                     <p className="muted">
                         {t('Ein Zuhause für deine Spielesammlung.', 'A home for your game collection.')}
                     </p>
-                    {forms && (
-                        <div className="segmented">
-                            <Button
-                                aria-pressed={method === 'password'}
-                                onClick={() => setMethod('password')}
-                            >
-                                {t('Benutzerkonto', 'Account')}
-                            </Button>
-                            <Button aria-pressed={method === 'key'} onClick={() => setMethod('key')}>
-                                API-Key
-                            </Button>
-                        </div>
-                    )}
                     <form
                         onSubmit={async (event) => {
                             event.preventDefault();
                             setBusy(true);
                             setError(undefined);
                             try {
-                                await login(
-                                    method === 'key' ? { apiKey: apiKey.trim() } : { username, password },
-                                );
+                                await login({ username, password });
                                 setPassword('');
-                                setApiKey('');
                                 onLogin();
                             } catch (err) {
                                 setError(err);
@@ -166,48 +155,25 @@ function Login({ forms, onLogin }: { forms: boolean; onLogin: () => void }) {
                             }
                         }}
                     >
-                        {method === 'key' ? (
-                            <>
-                                <Field label="API-Key">
-                                    <input
-                                        type="password"
-                                        autoComplete="off"
-                                        required
-                                        maxLength={64}
-                                        value={apiKey}
-                                        onChange={(event) => setApiKey(event.target.value)}
-                                    />
-                                </Field>
-                                <p className="hint">
-                                    {t(
-                                        'Beim ersten Start liegt der Schlüssel in der Datei bootstrap-api-key im Konfigurationsordner (im Container: /config/bootstrap-api-key).',
-                                        'On first startup, the key is in the bootstrap-api-key file in the configuration directory (in Docker: /config/bootstrap-api-key).',
-                                    )}
-                                </p>
-                            </>
-                        ) : (
-                            <>
-                                <Field label={t('Benutzername', 'Username')}>
-                                    <input
-                                        autoComplete="username"
-                                        required
-                                        maxLength={128}
-                                        value={username}
-                                        onChange={(event) => setUsername(event.target.value)}
-                                    />
-                                </Field>
-                                <Field label={t('Passwort', 'Password')}>
-                                    <input
-                                        type="password"
-                                        autoComplete="current-password"
-                                        required
-                                        maxLength={1024}
-                                        value={password}
-                                        onChange={(event) => setPassword(event.target.value)}
-                                    />
-                                </Field>
-                            </>
-                        )}
+                        <Field label={t('Benutzername', 'Username')}>
+                            <input
+                                autoComplete="username"
+                                required
+                                maxLength={128}
+                                value={username}
+                                onChange={(event) => setUsername(event.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('Passwort', 'Password')}>
+                            <input
+                                type="password"
+                                autoComplete="current-password"
+                                required
+                                maxLength={1024}
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                            />
+                        </Field>
                         <ErrorBox error={error} />
                         <Button type="submit" variant="primary" className="full" busy={busy}>
                             {t('Anmelden', 'Sign in')}
@@ -225,13 +191,164 @@ function Login({ forms, onLogin }: { forms: boolean; onLogin: () => void }) {
         </div>
     );
 }
+
+function AccountSetup({
+    protectedUpgrade,
+    onComplete,
+}: {
+    protectedUpgrade: boolean;
+    onComplete: () => void;
+}) {
+    const { t } = useLocale();
+    const [username, setUsername] = useState('administrator');
+    const [password, setPassword] = useState('');
+    const [confirmation, setConfirmation] = useState('');
+    const [transitionCode, setTransitionCode] = useState('');
+    const [authenticationMethod, setAuthenticationMethod] = useState<'Forms' | 'Basic'>('Forms');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<unknown>();
+    return (
+        <div className="login-screen">
+            <main className="login-panel setup-panel">
+                <div className="login-top">
+                    <Brand />
+                    <LanguageSwitch />
+                </div>
+                <div className="login-content">
+                    <p className="eyebrow">{t('ERSTE EINRICHTUNG', 'INITIAL SETUP')}</p>
+                    <h1>{t('Administratorkonto einrichten', 'Set up administrator account')}</h1>
+                    <p className="muted">
+                        {protectedUpgrade
+                            ? t(
+                                  'Diese aktualisierte Instanz ist geschützt. Lies den Einmalcode lokal aus account-setup-token im Konfigurationsordner.',
+                                  'This upgraded instance is protected. Read the one-time code locally from account-setup-token in the configuration directory.',
+                              )
+                            : t(
+                                  'Lege die Zugangsdaten für diese neue Ludus-Instanz fest.',
+                                  'Create credentials for this new Ludus instance.',
+                              )}
+                    </p>
+                    <form
+                        onSubmit={async (event) => {
+                            event.preventDefault();
+                            setError(undefined);
+                            if (password !== confirmation) {
+                                setError(
+                                    new Error(
+                                        t(
+                                            'Die Passwörter stimmen nicht überein.',
+                                            'The passwords do not match.',
+                                        ),
+                                    ),
+                                );
+                                return;
+                            }
+                            setBusy(true);
+                            try {
+                                resetCsrf();
+                                await api('auth/setup', {
+                                    method: 'POST',
+                                    body: {
+                                        username,
+                                        password,
+                                        authenticationMethod,
+                                        transitionCode: protectedUpgrade ? transitionCode.trim() : null,
+                                    },
+                                });
+                                resetCsrf();
+                                onComplete();
+                            } catch (err) {
+                                setError(err);
+                            } finally {
+                                setBusy(false);
+                            }
+                        }}
+                    >
+                        {protectedUpgrade && (
+                            <Field label={t('Einmaliger Übergangscode', 'One-time transition code')}>
+                                <input
+                                    type="password"
+                                    required
+                                    maxLength={64}
+                                    value={transitionCode}
+                                    onChange={(event) => setTransitionCode(event.target.value)}
+                                />
+                            </Field>
+                        )}
+                        <Field label={t('Benutzername', 'Username')}>
+                            <input
+                                autoComplete="username"
+                                required
+                                maxLength={128}
+                                value={username}
+                                onChange={(event) => setUsername(event.target.value)}
+                            />
+                        </Field>
+                        <Field
+                            label={t('Passwort (mindestens 12 Zeichen)', 'Password (at least 12 characters)')}
+                        >
+                            <input
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                minLength={12}
+                                maxLength={1024}
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('Passwort wiederholen', 'Confirm password')}>
+                            <input
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                minLength={12}
+                                maxLength={1024}
+                                value={confirmation}
+                                onChange={(event) => setConfirmation(event.target.value)}
+                            />
+                        </Field>
+                        <Field
+                            label={t('Anmeldemethode', 'Authentication method')}
+                            hint={t(
+                                'Forms verwendet die Ludus-Anmeldeseite. Basic verwendet den nativen Browserdialog und sollte nur über HTTPS genutzt werden.',
+                                'Forms uses the Ludus sign-in page. Basic uses the native browser dialog and should only be used over HTTPS.',
+                            )}
+                        >
+                            <select
+                                value={authenticationMethod}
+                                onChange={(event) =>
+                                    setAuthenticationMethod(event.target.value as 'Forms' | 'Basic')
+                                }
+                            >
+                                <option value="Forms">Forms</option>
+                                <option value="Basic">Basic</option>
+                            </select>
+                        </Field>
+                        <ErrorBox error={error} />
+                        <Button type="submit" variant="primary" className="full" busy={busy}>
+                            {t('Konto erstellen', 'Create account')}
+                        </Button>
+                    </form>
+                </div>
+            </main>
+        </div>
+    );
+}
 function Shell({ logout }: { logout: () => void }) {
     const { t, applyDefaultLocale } = useLocale();
     const location = useLocation();
     const [menu, setMenu] = useState(false);
     const [logoutError, setLogoutError] = useState<unknown>();
     const health = useResource<HealthIssue[]>('system/health', 60000);
-    const settings = useResource<{ language: 'de' | 'en'; instanceName: string }>('settings');
+    const settings = useResource<{
+        language: 'de' | 'en';
+        instanceName: string;
+        theme: 'Light' | 'Dark' | 'Auto';
+        shortDateFormat: string;
+        longDateFormat: string;
+        use12HourTime: boolean;
+    }>('settings');
     const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 760px)').matches);
     const sidebar = useRef<HTMLElement>(null);
     const main = useRef<HTMLElement>(null);
@@ -241,8 +358,30 @@ function Shell({ logout }: { logout: () => void }) {
         if (settings.data) {
             applyDefaultLocale(settings.data.language);
             document.title = settings.data.instanceName;
+            configureDisplaySettings(settings.data);
         }
-    }, [settings.data?.language, settings.data?.instanceName]);
+    }, [
+        settings.data?.language,
+        settings.data?.instanceName,
+        settings.data?.shortDateFormat,
+        settings.data?.longDateFormat,
+        settings.data?.use12HourTime,
+    ]);
+    useEffect(() => {
+        if (!settings.data) return;
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const apply = () => {
+            document.documentElement.dataset.theme =
+                settings.data!.theme === 'Auto'
+                    ? media.matches
+                        ? 'dark'
+                        : 'light'
+                    : settings.data!.theme.toLowerCase();
+        };
+        apply();
+        media.addEventListener('change', apply);
+        return () => media.removeEventListener('change', apply);
+    }, [settings.data?.theme]);
     useEffect(() => {
         const media = window.matchMedia('(max-width: 760px)');
         const update = () => {
@@ -355,6 +494,7 @@ function Shell({ logout }: { logout: () => void }) {
                         <Route path="/add" element={<AddPage />} />
                         <Route path="/games/:id" element={<GamePage />} />
                         <Route path="/activity/*" element={<ActivityPage />} />
+                        <Route path="/calendar" element={<CalendarPage />} />
                         <Route path="/settings/*" element={<SettingsPage />} />
                         <Route path="/system/*" element={<SystemPage />} />
                         <Route path="/library" element={<Navigate replace to="/" />} />

@@ -52,12 +52,14 @@ public sealed class RssSyncTask(IDbContextFactory<AppDbContext> databaseFactory,
         var games = await database.Games.AsNoTracking().Where(x => x.Monitored && x.Platform.Monitored).Include(x => x.Platform).Include(x => x.Files)
             .Include(x => x.QualityProfile).ThenInclude(x => x.Formats).ThenInclude(x => x.CustomFormat).ThenInclude(x => x.Rules).AsSplitQuery().ToArrayAsync(cancellationToken);
         var blocks = await database.ReleaseBlocks.AsNoTracking().ToArrayAsync(cancellationToken);
+        var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
         foreach (var indexer in indexers)
         {
             try
             {
                 var page = await client.GetRssAsync(indexer, cancellationToken: cancellationToken);
                 var parsed = page.Releases.Where(x => x.ParseWarnings.Count == 0 && x.DownloadUrl is not null
+                    && ReleasePolicy.Rejections(x, settings, DateTime.UtcNow).Count == 0
                     && (x.Protocol != DownloadProtocol.Torrent || indexer.MinimumSeeders == 0 || x.Seeders >= indexer.MinimumSeeders))
                     .Select(x => (Release: x, Parsed: parser.Parse(x.Title))).ToArray();
                 foreach (var game in games)

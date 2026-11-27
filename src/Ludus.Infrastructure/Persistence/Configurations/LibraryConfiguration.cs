@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace Ludus.Infrastructure.Persistence.Configurations;
 
 public sealed class LibraryConfiguration : IEntityTypeConfiguration<Platform>, IEntityTypeConfiguration<RootFolder>,
-    IEntityTypeConfiguration<Game>, IEntityTypeConfiguration<GameFile>, IEntityTypeConfiguration<GameMetadataReference>
+    IEntityTypeConfiguration<Game>, IEntityTypeConfiguration<GameFile>, IEntityTypeConfiguration<GameMetadataReference>,
+    IEntityTypeConfiguration<GameMetadataTranslation>
 {
     public void Configure(EntityTypeBuilder<Platform> entity)
     {
@@ -28,6 +29,7 @@ public sealed class LibraryConfiguration : IEntityTypeConfiguration<Platform>, I
     {
         entity.Property(x => x.Title).HasMaxLength(512);
         entity.Property(x => x.SortTitle).HasMaxLength(512);
+        entity.Property(x => x.ManagedFolderRelativePath).HasMaxLength(4096);
         entity.HasIndex(x => x.SortTitle);
         entity.HasIndex(x => new { x.PlatformId, x.Monitored, x.Status });
         entity.HasIndex(x => new { x.PlatformId, x.BaseTitleId }).IsUnique().HasFilter("\"BaseTitleId\" IS NOT NULL");
@@ -47,6 +49,15 @@ public sealed class LibraryConfiguration : IEntityTypeConfiguration<Platform>, I
         entity.HasIndex(x => new { x.GameId, x.Provider }).IsUnique();
         entity.HasIndex(x => new { x.Provider, x.ExternalId });
         entity.HasOne(x => x.Game).WithMany(x => x.MetadataReferences).HasForeignKey(x => x.GameId).OnDelete(DeleteBehavior.Cascade);
+    }
+
+    public void Configure(EntityTypeBuilder<GameMetadataTranslation> entity)
+    {
+        entity.Property(x => x.Language).HasMaxLength(16);
+        entity.Property(x => x.TitleLanguage).HasMaxLength(16);
+        entity.Property(x => x.DescriptionLanguage).HasMaxLength(16);
+        entity.HasIndex(x => new { x.GameId, x.Provider, x.Language }).IsUnique();
+        entity.HasOne(x => x.Game).WithMany(x => x.MetadataTranslations).HasForeignKey(x => x.GameId).OnDelete(DeleteBehavior.Cascade);
     }
 
     public void Configure(EntityTypeBuilder<GameFile> entity)

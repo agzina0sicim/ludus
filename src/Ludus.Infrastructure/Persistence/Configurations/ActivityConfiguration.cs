@@ -15,6 +15,7 @@ public sealed class ActivityConfiguration : IEntityTypeConfiguration<TrackedDown
         entity.HasIndex(x => new { x.DownloadClientId, x.DownloadId }).IsUnique();
         entity.HasIndex(x => new { x.GameId, x.ReleaseFingerprint });
         entity.HasIndex(x => x.Status);
+        entity.HasIndex(x => new { x.Status, x.FailureHandledAtUtc });
         entity.HasIndex(x => x.SubmissionToken).IsUnique();
         entity.Check("Progress", "\"Size\" >= 0 AND \"DownloadedBytes\" >= 0 AND \"SpeedBytesPerSecond\" >= 0 AND (\"EtaSeconds\" IS NULL OR \"EtaSeconds\" >= 0) AND \"ImportAttempts\" >= 0");
     }

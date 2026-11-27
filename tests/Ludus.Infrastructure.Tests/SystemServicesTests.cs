@@ -15,6 +15,47 @@ namespace Ludus.Infrastructure.Tests;
 
 public sealed class SystemServicesTests
 {
+    [Fact]
+    public async Task ManagedEmptyFoldersAreCreatedAndDeletedWithoutTouchingForeignDirectories()
+    {
+        await using var fixture = new TestDatabase();
+        await fixture.InitializeAsync();
+        Directory.CreateDirectory(fixture.Paths.RomDirectory);
+        var foreign = Path.Combine(fixture.Paths.RomDirectory, "foreign");
+        Directory.CreateDirectory(foreign);
+        await using var scope = fixture.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var profile = await database.QualityProfiles.SingleAsync();
+        var root = await database.RootFolders.SingleAsync();
+        var settings = await database.AppSettings.SingleAsync();
+        settings.CreateEmptyFolders = true;
+        settings.DeleteEmptyFolders = true;
+        var game = new Game
+        {
+            Title = "Managed Example", SortTitle = "Managed Example", PlatformId = profile.PlatformId,
+            RootFolderId = root.Id, QualityProfileId = profile.Id, Monitored = true
+        };
+        database.Games.Add(game);
+        await database.SaveChangesAsync();
+        var scanner = scope.ServiceProvider.GetRequiredService<LibraryScanner>();
+
+        await scanner.ScanAsync(root.Id, profile.PlatformId, default);
+        database.ChangeTracker.Clear();
+        game = await database.Games.SingleAsync();
+        Assert.NotNull(game.ManagedFolderRelativePath);
+        var managed = Path.Combine(root.Path, game.ManagedFolderRelativePath!);
+        Assert.True(Directory.Exists(managed));
+        Assert.True(Directory.Exists(foreign));
+
+        game.Monitored = false;
+        await database.SaveChangesAsync();
+        await scanner.ScanAsync(root.Id, profile.PlatformId, default);
+        database.ChangeTracker.Clear();
+        Assert.Null((await database.Games.SingleAsync()).ManagedFolderRelativePath);
+        Assert.False(Directory.Exists(managed));
+        Assert.True(Directory.Exists(foreign));
+    }
+
     [Theory]
     [InlineData(false, VerificationStatus.VerifiedGoodDump)]
     [InlineData(true, VerificationStatus.Modified)]

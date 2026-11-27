@@ -15,6 +15,8 @@ export type Game = {
   monitored: boolean;
   status: string;
   releaseYear: number | null;
+  releaseDateUtc?: string | null;
+  releaseDatePrecision?: 'Exact' | 'Month' | 'Year' | null;
   coverRelativePath: string | null;
   fileCount: number;
   description?: string | null;
@@ -47,6 +49,10 @@ export type GameDetails = Game & {
   baseTitleId: string | null;
   files: GameFile[];
   metadataReferences: { provider: string; externalId: string }[];
+  requestedMetadataLanguage: string;
+  titleLanguage: string | null;
+  descriptionLanguage: string | null;
+  availableMetadataLanguages: string[];
 };
 export type Page<T> = { total: number; page: number; pageSize: number; items: T[] };
 export type Metadata = {
@@ -114,5 +120,10 @@ export type HealthIssue = {
   message: string;
   lastCheckedAtUtc: string;
 };
-export type Session = { authenticated: boolean; formsAuthenticationEnabled: boolean };
+export type Session = {
+  authenticated: boolean;
+  authenticationMethod: 'Forms' | 'Basic';
+  setupRequired: boolean;
+  setupProtected: boolean;
+};
 export type MediaLink = { url: string; expiresAtUtc: string };

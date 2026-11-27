@@ -41,12 +41,14 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
         if (await database.Downloads.AnyAsync(x => x.GameId == gameId && x.Status != DownloadStatus.Imported && x.Status != DownloadStatus.Failed, cancellationToken)) return null;
         var indexer = await database.Indexers.SingleAsync(x => x.Id == release.IndexerId, cancellationToken);
         var blocks = await database.ReleaseBlocks.Where(x => x.GameId == gameId).ToArrayAsync(cancellationToken);
+        var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
         var parsed = parser.Parse(release.Title);
         var decision = scorer.Evaluate(parsed, new ReleaseEvaluationContext(game.QualityProfile, game.Platform)
         {
             Game = game, ExistingFiles = game.Files.ToArray(), Blocks = blocks, ReleaseFingerprint = release.Fingerprint, Automatic = automatic
         });
-        if (!decision.Accepted || release.DownloadUrl is null || release.ParseWarnings.Count > 0
+        if (!decision.Accepted || ReleasePolicy.Rejections(release, settings, DateTime.UtcNow).Count > 0
+            || release.DownloadUrl is null || release.ParseWarnings.Count > 0
             || release.Protocol == DownloadProtocol.Torrent && indexer.MinimumSeeders > 0 && (release.Seeders is null || release.Seeders < indexer.MinimumSeeders))
             throw new DownloadClientException("ReleaseRejected");
         var client = await database.DownloadClients.Where(x => x.Enabled && (release.Protocol == DownloadProtocol.Usenet
@@ -58,7 +60,7 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
             GameId = game.Id, DownloadClientId = client.Id, IndexerId = indexer.Id, DownloadId = token, SubmissionToken = token,
             ReleaseGuid = release.ReleaseId, ReleaseFingerprint = release.Fingerprint, ReleaseTitle = release.Title, SourceUrl = release.DownloadUrl,
             Protocol = release.Protocol, ContentKind = parsed.ContentKind, Status = DownloadStatus.Queued, Score = decision.Score, Size = release.Size,
-            FailureCode = "SubmissionPending"
+            FailureCode = "SubmissionPending", Origin = automatic ? GrabOrigin.Automatic : GrabOrigin.Interactive
         };
         database.Downloads.Add(download);
         game.Status = GameStatus.Downloading;
@@ -147,6 +149,16 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
                     }
                     else if (snapshot.Status == DownloadStatus.Completed)
                     {
+                        var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
+                        if (!settings.EnableCompletedDownloadHandling)
+                        {
+                            download.Status = DownloadStatus.Completed;
+                            download.CompletedAtUtc ??= DateTime.UtcNow;
+                            download.FailureCode = null;
+                            await database.SaveChangesAsync(cancellationToken);
+                            await PublishAsync(download, cancellationToken);
+                            continue;
+                        }
                         download.Status = DownloadStatus.Importing;
                         download.CompletedAtUtc ??= DateTime.UtcNow;
                         download.ImportAttempts++;
@@ -159,12 +171,15 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
                         }
                         catch (ImportException exception) when (exception.Permanent)
                         {
-                            await FailAsync(database, download, true, exception.Code, client, cancellationToken);
+                            await FailAsync(database, download, true, exception.Code, client, cancellationToken, importFailure: true);
                             await CleanupAsync(database, client, download, snapshot, cancellationToken);
                         }
                         catch (Exception exception) when (exception is ImportException or IOException or UnauthorizedAccessException)
                         {
-                            download.FailureCode = exception is ImportException error ? error.Code : "ImportStorageUnavailable";
+                            var failureCode = exception is ImportException error ? error.Code : "ImportStorageUnavailable";
+                            if (download.FailureCode != failureCode)
+                                await WebhookService.EnqueueAsync(database, NotificationEvent.ImportFailed, download.Game.Title, download.ReleaseTitle, cancellationToken);
+                            download.FailureCode = failureCode;
                             await database.SaveChangesAsync(cancellationToken);
                             await events.PublishAsync("healthWarning", new { resource = $"download:{download.Id}", code = download.FailureCode }, cancellationToken);
                         }
@@ -195,6 +210,29 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
         finally { gate.Semaphore.Release(); }
     }
 
+    public async Task ImportCompletedAsync(long downloadId, CancellationToken cancellationToken)
+    {
+        await gate.Semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            await using var database = await databaseFactory.CreateDbContextAsync(cancellationToken);
+            var download = await database.Downloads.Include(x => x.DownloadClient).Include(x => x.Game)
+                .SingleOrDefaultAsync(x => x.Id == downloadId, cancellationToken) ?? throw new KeyNotFoundException();
+            if (download.Status != DownloadStatus.Completed || string.IsNullOrWhiteSpace(download.RemoteContentPath))
+                throw new InvalidOperationException("Only completed downloads with a content path can be imported manually.");
+            download.Status = DownloadStatus.Importing;
+            download.ImportAttempts++;
+            await database.SaveChangesAsync(cancellationToken);
+            try { await importer.ImportAsync(download.Id, download.RemoteContentPath, cancellationToken); }
+            catch (ImportException exception) when (exception.Permanent)
+            {
+                await FailAsync(database, download, true, exception.Code, download.DownloadClient, cancellationToken, importFailure: true);
+                throw;
+            }
+        }
+        finally { gate.Semaphore.Release(); }
+    }
+
     private static async Task ConfirmGrabAsync(AppDbContext database, TrackedDownload download, CancellationToken cancellationToken)
     {
         download.FailureCode = null;
@@ -207,8 +245,10 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
         await database.SaveChangesAsync(cancellationToken);
     }
 
-    private static async Task FailAsync(AppDbContext database, TrackedDownload download, bool permanent, string code, DownloadClient client, CancellationToken cancellationToken)
+    private static async Task FailAsync(AppDbContext database, TrackedDownload download, bool permanent, string code, DownloadClient client,
+        CancellationToken cancellationToken, bool importFailure = false)
     {
+        if (download.FailureHandledAtUtc is not null) return;
         var block = await database.ReleaseBlocks.SingleOrDefaultAsync(x => x.GameId == download.GameId && x.ReleaseFingerprint == download.ReleaseFingerprint, cancellationToken);
         if (block is null)
         {
@@ -223,12 +263,16 @@ public sealed class DownloadCoordinator(IDbContextFactory<AppDbContext> database
         download.Status = DownloadStatus.Failed;
         download.FailureCode = code;
         download.CleanupPending = client.RemoveFailed;
-        download.ReplacementSearchPending = true;
+        var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
+        download.ReplacementSearchPending = download.Origin == GrabOrigin.Interactive
+            ? settings.RedownloadFailedFromInteractiveSearch : settings.RedownloadFailed;
+        download.FailureHandledAtUtc = DateTime.UtcNow;
         download.Game.Status = await database.GameFiles.AnyAsync(x => x.GameId == download.GameId && !x.Missing && x.ContentKind == ContentKind.Base, cancellationToken)
             ? GameStatus.Available : GameStatus.Missing;
         database.History.Add(new HistoryEntry { GameId = download.GameId, DownloadId = download.Id, GameTitle = download.Game.Title, ReleaseTitle = download.ReleaseTitle,
             Event = HistoryEvent.DownloadFailed, ContentKind = download.ContentKind, Message = code });
-        await WebhookService.EnqueueAsync(database, NotificationEvent.DownloadFailed, download.Game.Title, download.ReleaseTitle, cancellationToken);
+        await WebhookService.EnqueueAsync(database, importFailure ? NotificationEvent.ImportFailed : NotificationEvent.DownloadFailed,
+            download.Game.Title, download.ReleaseTitle, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
     }
 

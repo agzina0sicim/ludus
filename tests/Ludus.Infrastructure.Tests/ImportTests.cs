@@ -17,6 +17,25 @@ namespace Ludus.Infrastructure.Tests;
 public sealed class ImportTests
 {
     [Fact]
+    public async Task FreeSpaceCheckUsesCopySizeButDoesNotRejectSuccessfulHardlinks()
+    {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux()) return;
+        await using var fixture = new TestDatabase();
+        Directory.CreateDirectory(fixture.Paths.RomDirectory);
+        Directory.CreateDirectory(fixture.Paths.DownloadDirectory);
+        var source = Path.Combine(fixture.Paths.DownloadDirectory, "source.rom");
+        await File.WriteAllTextAsync(source, "content");
+        var files = new AtomicFiles();
+        var hardlinkTarget = Path.Combine(fixture.Paths.RomDirectory, "hardlink.rom");
+        Assert.True(await files.StageAsync(source, hardlinkTarget, true, default, false, long.MaxValue));
+        var copyTarget = Path.Combine(fixture.Paths.RomDirectory, "copy.rom");
+        var error = await Assert.ThrowsAsync<ImportException>(() =>
+            files.StageAsync(source, copyTarget, false, default, false, long.MaxValue));
+        Assert.Equal("InsufficientFreeSpace", error.Code);
+        Assert.False(File.Exists(copyTarget));
+    }
+
+    [Fact]
     public async Task ImportIsIdempotentRetainsSeedSourceAndRecyclesOnUpgrade()
     {
         await using var fixture = new TestDatabase();

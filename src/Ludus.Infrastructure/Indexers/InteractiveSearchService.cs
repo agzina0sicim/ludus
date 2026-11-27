@@ -19,6 +19,7 @@ public sealed class InteractiveSearchService(IDbContextFactory<AppDbContext> dat
             .AsSplitQuery().SingleOrDefaultAsync(x => x.Id == gameId, cancellationToken)
             ?? throw new KeyNotFoundException("Game does not exist.");
         var blocks = await database.ReleaseBlocks.AsNoTracking().Where(x => x.GameId == gameId).ToListAsync(cancellationToken);
+        var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
         var indexers = await database.Indexers.Where(x => automatic ? x.EnableAutomaticSearch : x.EnableInteractiveSearch).OrderBy(x => x.Priority).ThenBy(x => x.Id).ToListAsync(cancellationToken);
         var releases = new List<EvaluatedRelease>();
         var failures = new List<IndexerFailure>();
@@ -53,6 +54,7 @@ public sealed class InteractiveSearchService(IDbContextFactory<AppDbContext> dat
                             Game = game, ExistingFiles = game.Files.ToArray(), Blocks = blocks, ReleaseFingerprint = release.Fingerprint, Automatic = automatic
                         });
                         var reasons = decision.Rejections.ToList();
+                        reasons.AddRange(ReleasePolicy.Rejections(release, settings, DateTime.UtcNow));
                         if (release.ParseWarnings.Count != 0) reasons.Add(RejectionReasons.Create(RejectionCode.AmbiguousRelease));
                         if (release.DownloadUrl is null) reasons.Add(RejectionReasons.Create(RejectionCode.DownloadUnavailable));
                         var specificCategories = release.Categories.Where(category => category % 1000 != 0).ToArray();

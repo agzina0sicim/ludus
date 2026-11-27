@@ -62,7 +62,10 @@ geloggt. Fehlercodes ersetzen möglicherweise sensitive Server-Fehlertexte.
 ## CDH und Fehlerbehandlung
 
 Der Coordinator verarbeitet nur in Ludus registrierte Aufträge, die zusätzlich
-zur isolierten Client-Kategorie gehören. Es gibt keinen Watch-Folder.
+zur isolierten Client-Kategorie gehören. Es gibt keinen Watch-Folder. Ist
+Completed Download Handling deaktiviert, bleibt die Queue sichtbar und fertige
+Aufträge können weiterhin manuell importiert werden; nur der automatische Import
+ist ausgesetzt.
 
 1. Queue-Daten aktualisieren: Status, Größe, Fortschritt, Geschwindigkeit und ETA.
 2. Fertige Downloads anhand des vom Client gelieferten Pfads importieren.
@@ -74,9 +77,12 @@ Tracker-/Netzwerkfehler erzeugen einen sieben Tage gültigen Cooldown. Beschädi
 Archive oder ungültige Importinhalte erzeugen eine permanente Sperre. Eine
 permanente Sperre wird nicht zu einem Cooldown herabgestuft. Bei aktivem
 `RemoveFailed` entfernt Ludus den fehlgeschlagenen Auftrag; Quelldaten werden nur
-bei permanenter Sperre zur Löschung an den Client übergeben. Anschließend sucht
-der Coordinator automatisch ein akzeptiertes Ersatzrelease. Blocklist, Monitoring,
-Mindestscore und Cutoff gelten auch bei dieser Suche.
+bei permanenter Sperre zur Löschung an den Client übergeben. Die dauerhaft
+gespeicherte Grab-Herkunft unterscheidet automatische von interaktiven Grabs.
+`Redownload Failed` und `Redownload Failed from Interactive Search` steuern die
+Ersatzsuche daher unabhängig. Jede Ersatzsuche behält Plattform und Qualitätsprofil
+bei und berücksichtigt Blocklist, Cooldown, Monitoring, Mindestscore und Cutoff.
+Ein gespeicherter Verarbeitungszeitpunkt verhindert doppelte Fehlerverarbeitung.
 
 Lokale Probleme wie fehlender Mount, Schreibrechte, voller Datenträger oder eine
 Zielkollision lösen eine Warnung und einen späteren Importversuch aus. Sie sperren
@@ -128,6 +134,19 @@ vorbereitet und geprüft. Native Hardlinks werden bevorzugt. Da .NET 10 keinen
 Mount-Grenzen erfolgt eine Kopie über eine temporäre Datei mit anschließendem Rename.
 Die Download-Quelle bleibt zum Seeden erhalten.
 
+Die Platzprüfung läuft auf dem tatsächlichen Ziellaufwerk und berücksichtigt
+Dateigröße, konfigurierten Restfreiraum und Hardlinks. Bei Platzmangel bleibt ein
+verständlicher Importstatus erhalten. Ludus verwaltet nur als eigene Spielordner
+erfasste Verzeichnisse: leere Ordner für überwachte Spiele können angelegt und nur
+dann entfernt werden, wenn sie tatsächlich leer sind. Root Folders, fremde
+Verzeichnisse und Ziele außerhalb der Bibliothek werden nie entfernt.
+
+Unter Linux können neue Verzeichnisse und kopierte Dateien einen konfigurierten
+Modus sowie optional eine Gruppe erhalten. Nicht gesetzte Werte lassen UMASK und
+Containerkonfiguration wirken. Bei Hardlinks werden Dateirechte nicht nachträglich
+geändert, weil Quelle und Ziel denselben Inode teilen. Unter Windows kennzeichnet
+die Oberfläche diese Optionen als nicht wirksam.
+
 Vor Änderungen an bestehenden Bibliotheksdateien wird ein Journal unter
 `/config/Imports/<download-id>.json` geschrieben. Alte Dateien werden zunächst in
 den Recycling Bin kopiert und per SHA1 geprüft, dann aus ihrem bisherigen Ziel
@@ -160,8 +179,12 @@ gespeichert. Die Zustellung erfolgt mit exponentiellen Wiederholungen, höchsten
 zehn Versuchen und maximal einer Stunde Abstand. Nach zehn Fehlern bleibt der
 Auftrag zur Diagnose gespeichert. Die Zustellung erfolgt mindestens einmal;
 ein Abbruch nach erfolgreichem HTTP-Aufruf kann eine doppelte Benachrichtigung
-verursachen. Discord-Mentions sind deaktiviert. `TestAsync` unterstützt den
-späteren Test-Button.
+verursachen. Discord-Mentions sind deaktiviert. Mehrere benannte Verbindungen
+können je Ereignis aktiviert und direkt getestet werden. Discord, Gotify, Telegram
+und generische HTTP-Webhooks erhalten jeweils ihr natives Nachrichtenformat;
+Tokens und geheime URLs werden mit dem vorhandenen Secret-Schutz gespeichert und
+in Diagnoseausgaben bereinigt. Ein Zustellfehler verändert den Status eines bereits
+erfolgreichen Imports nicht.
 
 Der Hub `/hubs/activity` sendet `queueUpdated`, `importStatus`, `rssUpdated`,
 `taskUpdated` und `healthWarning`. Handshake und Transport verlangen bereits den

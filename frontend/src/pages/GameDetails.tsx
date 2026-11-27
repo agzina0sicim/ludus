@@ -11,7 +11,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, mediaUrl } from '../api';
+import { api, mediaUrl, query } from '../api';
 import { useResource } from '../hooks';
 import { bytes, date, useLabel, useLocale } from '../i18n';
 import {
@@ -40,10 +40,16 @@ import { HistoryTable } from './Activity';
 
 export default function GameDetailsPage() {
     const { id } = useParams();
-    const { t } = useLocale();
+    const { t, locale } = useLocale();
     const navigate = useNavigate();
     const [tab, setTab] = useState('files');
-    const data = useResource<GameDetails>(/^\d+$/.test(id ?? '') ? `games/${id}` : null, 60000);
+    const [metadataLanguage, setMetadataLanguage] = useState<string>();
+    const data = useResource<GameDetails>(
+        /^\d+$/.test(id ?? '')
+            ? `games/${id}${metadataLanguage ? `?${query({ language: metadataLanguage })}` : ''}`
+            : null,
+        60000,
+    );
     const platforms = useResource<Platform[]>('platforms');
     const profiles = useResource<Profile[]>('profiles');
     const [edit, setEdit] = useState(false);
@@ -142,7 +148,31 @@ export default function GameDetailsPage() {
                 <div className="game-identity">
                     <Link to="/">{t('Bibliothek', 'Library')}</Link>
                     <h1>{game.title}</h1>
-                    <p>{[platform?.name, game.releaseYear, ...game.genres].filter(Boolean).join(' · ')}</p>
+                    {game.availableMetadataLanguages.length > 0 && (
+                        <Field label={t('Metadatenfassung', 'Metadata version')}>
+                            <select
+                                value={metadataLanguage ?? game.requestedMetadataLanguage}
+                                onChange={(event) => setMetadataLanguage(event.target.value)}
+                            >
+                                {game.availableMetadataLanguages.map((language) => (
+                                    <option key={language} value={language}>
+                                        {language.toUpperCase()}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                    )}
+                    <p>
+                        {[
+                            platform?.name,
+                            game.releaseDateUtc && game.releaseDatePrecision === 'Exact'
+                                ? date(game.releaseDateUtc, locale, 'short')
+                                : game.releaseYear,
+                            ...game.genres,
+                        ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                    </p>
                     <div className="actions">
                         <Badge value={game.status} />
                         <Badge>
@@ -187,6 +217,12 @@ export default function GameDetailsPage() {
                 {game.description && (
                     <section className="game-overview">
                         <h2>{t('Beschreibung', 'Overview')}</h2>
+                        <p className="hint">
+                            {t('Titel', 'Title')}:{' '}
+                            {(game.titleLanguage ?? t('unbekannt', 'unknown')).toUpperCase()} ·{' '}
+                            {t('Beschreibung', 'Description')}:{' '}
+                            {(game.descriptionLanguage ?? t('unbekannt', 'unknown')).toUpperCase()}
+                        </p>
                         <p>{game.description}</p>
                     </section>
                 )}
@@ -394,11 +430,13 @@ function EditGame({ game, onClose }: { game: GameDetails; onClose: () => void })
                             setDraft({ ...draft, qualityProfileId: Number(event.target.value) })
                         }
                     >
-                        {profiles.data?.map((item) => (
-                            <option key={item.profile.id} value={item.profile.id}>
-                                {item.profile.name}
-                            </option>
-                        ))}
+                        {profiles.data
+                            ?.filter((item) => Number(item.profile.platformId) === game.platformId)
+                            .map((item) => (
+                                <option key={item.profile.id} value={item.profile.id}>
+                                    {item.profile.name}
+                                </option>
+                            ))}
                     </select>
                 </Field>
                 <label className="check">

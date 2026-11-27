@@ -15,12 +15,10 @@ export function useSettingsSections() {
     ],
     [
       'profiles',
-      t('Profile & Formate', 'Profiles & formats'),
-      t(
-        'Qualitätsprofile, Cutoffs und benutzerdefinierte Formate',
-        'Quality profiles, cutoffs and custom formats',
-      ),
+      t('Profile', 'Profiles'),
+      t('Plattformgebundene Qualitätsprofile und Cutoffs', 'Platform-bound quality profiles and cutoffs'),
     ],
+    ['formats', 'Custom Formats', t('Wiederverwendbare Erkennungsregeln', 'Reusable matching rules')],
     [
       'indexers',
       t('Indexer', 'Indexers'),
@@ -37,6 +35,14 @@ export function useSettingsSections() {
       t('IGDB, ScreenScraper und Plattformzuordnungen', 'IGDB, ScreenScraper and platform mappings'),
     ],
     ['connect', 'Connect', t('Webhooks und Benachrichtigungen', 'Webhooks and notifications')],
+    [
+      'ui',
+      'UI',
+      t(
+        'Kalender, Datumsanzeige, Darstellung und Sprache',
+        'Calendar, date display, appearance, and language',
+      ),
+    ],
     [
       'general',
       t('Allgemein & Sicherheit', 'General & security'),

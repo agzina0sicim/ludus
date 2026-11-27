@@ -29,6 +29,7 @@ public sealed class LibraryScanner(IDbContextFactory<AppDbContext> factory, Impo
         var roots = await database.RootFolders.Where(x => rootId == null || x.Id == rootId).ToArrayAsync(cancellationToken);
         if (rootId is not null && roots.Length == 0) throw new KeyNotFoundException();
         var platforms = await database.Platforms.ToArrayAsync(cancellationToken);
+        var settings = await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken);
         if (platformId is not null && platforms.All(x => x.Id != platformId)) throw new KeyNotFoundException();
         var profiles = await database.QualityProfiles.Include(x => x.Formats).ThenInclude(x => x.CustomFormat).ThenInclude(x => x.Rules).AsSplitQuery().OrderBy(x => x.Id).ToArrayAsync(cancellationToken);
         if (profiles.Length == 0) throw new InvalidOperationException("A quality profile is required for scans.");
@@ -147,7 +148,24 @@ public sealed class LibraryScanner(IDbContextFactory<AppDbContext> factory, Impo
                     if (game is null)
                     {
                         if (parsed.ContentKind != ContentKind.Base || string.IsNullOrWhiteSpace(parsed.Title)) { skipped++; continue; }
-                        game = new Game { Title = parsed.Title, SortTitle = parsed.Title, Platform = platform, RootFolder = root, QualityProfile = profiles[0],
+                        var profile = profiles.FirstOrDefault(x => x.PlatformId == platform.Id);
+                        if (profile is null)
+                        {
+                            var template = profiles[0];
+                            profile = new Ludus.Domain.Profiles.QualityProfile
+                            {
+                                Name = template.Name, Platform = platform, MinimumScore = template.MinimumScore,
+                                AllowUpgrades = template.AllowUpgrades, UpgradeUntilScore = template.UpgradeUntilScore,
+                                AllowedRegions = template.AllowedRegions.ToList(), ExcludedRegions = template.ExcludedRegions.ToList(),
+                                RejectBeta = template.RejectBeta, RejectDemo = template.RejectDemo, RejectPrototype = template.RejectPrototype,
+                                AllowUpdates = template.AllowUpdates, AllowDlc = template.AllowDlc,
+                                Formats = template.Formats.Select(x => new Ludus.Domain.Profiles.QualityProfileFormat
+                                    { CustomFormatId = x.CustomFormatId, Score = x.Score }).ToList()
+                            };
+                            database.QualityProfiles.Add(profile);
+                            profiles = [.. profiles, profile];
+                        }
+                        game = new Game { Title = parsed.Title, SortTitle = parsed.Title, Platform = platform, RootFolder = root, QualityProfile = profile,
                             Serials = parsed.Serials.ToList(), BaseTitleId = parsed.SwitchIdentity?.BaseTitleId };
                         database.Games.Add(game);
                         games.Add(game);
@@ -175,6 +193,36 @@ public sealed class LibraryScanner(IDbContextFactory<AppDbContext> factory, Impo
             foreach (var game in games) game.Status = game.Files.Any(x => !x.Missing && x.ContentKind == ContentKind.Base && x.Role is FileRole.Rom or FileRole.Descriptor)
                 && !game.Files.Any(x => x.Missing && x.ContentKind == ContentKind.Base && x.Role != FileRole.Playlist)
                 ? GameStatus.Available : await database.Downloads.AnyAsync(x => x.GameId == game.Id && x.Status != DownloadStatus.Imported && x.Status != DownloadStatus.Failed, cancellationToken) ? GameStatus.Downloading : GameStatus.Missing;
+            foreach (var game in games)
+            {
+                var extension = game.Platform.AllowedExtensions.FirstOrDefault(x => x is not ".zip" and not ".7z") ?? ".rom";
+                var rendered = ImportPlanner.Render(settings.NamingSchema, game, parser.Parse(game.Title + extension), extension.TrimStart('.'));
+                var relative = Path.GetDirectoryName(rendered)?.Replace('\\', '/');
+                if (string.IsNullOrWhiteSpace(relative)) continue;
+                var target = SafePaths.Within(root.Path, relative);
+                if (settings.CreateEmptyFolders && game.Monitored)
+                {
+                    if (game.ManagedFolderRelativePath is null && !Directory.Exists(target))
+                    {
+                        MediaPermissions.CreateDirectory(target, settings);
+                        game.ManagedFolderRelativePath = relative;
+                    }
+                    else if (string.Equals(game.ManagedFolderRelativePath, relative, SafePaths.Comparison) && !Directory.Exists(target))
+                    {
+                        MediaPermissions.CreateDirectory(target, settings);
+                    }
+                }
+                if (settings.DeleteEmptyFolders && game.ManagedFolderRelativePath is { } managed
+                    && (!game.Monitored || !settings.CreateEmptyFolders))
+                {
+                    var managedPath = SafePaths.Within(root.Path, managed);
+                    if (Directory.Exists(managedPath) && !Directory.EnumerateFileSystemEntries(managedPath).Any())
+                    {
+                        Directory.Delete(managedPath);
+                        game.ManagedFolderRelativePath = null;
+                    }
+                }
+            }
             root.LastScanAtUtc = DateTime.UtcNow;
             await database.SaveChangesAsync(cancellationToken);
             await events.PublishAsync("scanUpdated", new { rootId = root.Id, status = "Completed", files = filesCount, added, relocated, missing, skipped }, cancellationToken);

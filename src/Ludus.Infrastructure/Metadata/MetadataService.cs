@@ -73,6 +73,8 @@ public sealed class MetadataService(AppDbContext database, IEnumerable<IMetadata
         {
             var settings = await database.MetadataProviders.SingleAsync(x => x.Provider == provider, cancellationToken);
             if (!settings.Enabled) throw new MetadataException("ProviderDisabled");
+            var language = (await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken)).MetadataLanguage;
+            key = language + ":" + key;
             key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
             var cached = await database.MetadataCache.SingleOrDefaultAsync(x => x.Provider == provider && x.CacheKey == key, cancellationToken);
             if (!refresh && cached?.ExpiresAtUtc > DateTime.UtcNow) return JsonSerializer.Deserialize<MetadataGame[]>(cached.PayloadJson) ?? [];

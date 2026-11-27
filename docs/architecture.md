@@ -94,7 +94,7 @@ Die folgenden Modulpfade werden mit ihrer Implementierung angelegt:
 
 | Bereich | Tabellen und Beziehungen |
 |---|---|
-| Bibliothek | `Platforms`, `RootFolders`, `Games`, `GameFiles`, `GameMetadataReferences` |
+| Bibliothek | `Platforms`, `RootFolders`, `Games`, `GameFiles`, `GameMetadataReferences`, `GameMetadataTranslations` |
 | DAT | `DatFiles` → `DatGames` → `DatRoms`; Dateien verweisen optional auf `DatRoms` |
 | Qualität | `QualityProfiles`, `CustomFormats`, `CustomFormatRules`, M:N `QualityProfileFormats` mit profilabhängigem Score |
 | Integration | `Indexers`, `DownloadClients`, `RemotePathMappings`, `MetadataProviders`, `MetadataCache`, `Webhooks` |
@@ -102,7 +102,8 @@ Die folgenden Modulpfade werden mit ihrer Implementierung angelegt:
 | System | `AppSettings`, `SecuritySettings`, `ScheduledTasks`, `TaskRuns`, `HealthIssues`, `Backups` |
 
 Spiele referenzieren genau eine Plattform, einen frei wählbaren Root Folder und
-ein Qualitätsprofil. Root Folders sind keine Plattform-Unterobjekte. Sie dürfen
+ein Qualitätsprofil derselben Plattform. Mehrere Profile pro Plattform sind möglich;
+Custom Formats bleiben global wiederverwendbar und ihre Scores profilspezifisch. Root Folders sind keine Plattform-Unterobjekte. Sie dürfen
 mehrere Plattformen enthalten; pro Plattform sind mehrere Roots möglich.
 Dateipfade sind relativ zum Root Folder des Spiels. `FileGroupId` gruppiert
 zusammengehörige ROMs, Deskriptoren, Tracks und Playlists. `ContentKind` trennt
@@ -128,7 +129,7 @@ müssen den gewünschten Umgang mit diesen Beziehungen ausdrücklich festlegen.
 
 SQLite erzwingt Fremdschlüssel, eindeutige Indizes und CHECK-Constraints u. a.
 für Hashlängen, Datei-Pfadtraversal, Cutoff, Intervalle, Singleton-Einstellungen,
-Forms-Credentials, Enum-Werte und die unveränderliche Client-Kategorie `ludus`.
+Kontozustand/-Credentials, Enum-Werte und die unveränderliche Client-Kategorie `ludus`.
 Listen sind JSON-Arrays mit Value Comparern für Änderungen innerhalb der Liste.
 UTC-Zeitpunkte werden als `DateTime` gespeichert und beim Lesen mit UTC-Kind
 versehen. Eine GUID als Concurrency Token schützt vor verlorenen Änderungen.
@@ -158,7 +159,7 @@ werden; der Start bricht dann ab, statt unbemerkt Credentials zu ersetzen.
 
 Der Seed enthält 22 Plattformen mit Endungen, Farben und passenden
 Standardkategorien, einen Root `ROMs`, sechs Custom Formats, ein Profil
-`Europe preferred`, zwei deaktivierte Metadatenprovider und sechs Task-Typen.
+`Europe preferred` für die erste Plattform, zwei deaktivierte Metadatenprovider und sechs Task-Typen.
 Er legt keine fiktiven Spiele, Downloads oder Zugangsdaten an. Provider-System-IDs
 sind konfigurierbar und bleiben bis zur Provider-Konfiguration ungesetzt.
 Roots werden registriert, aber nicht auf dem Dateisystem erzeugt.
@@ -177,7 +178,7 @@ Download-Quell-URLs speichern Data-Protection-Ciphertext. Webhook-URLs werden
 vollständig verschlüsselt, da ihr Pfad ein Zugriffstoken enthalten kann.
 HTTP-Basisadressen für Indexer/Clients dürfen weder Userinfo noch Query-String
 enthalten; API-Keys gehören in separate Secret-Felder. Passwörter für Forms-Auth
-werden als Passwort-Hash modelliert, nicht als entschlüsselbares Secret.
+und HTTP Basic werden als gemeinsamer Passwort-Hash modelliert, nicht als entschlüsselbares Secret.
 
 Ein kryptografisch zufälliger API-Key mit 256 Bit Entropie wird beim ersten Start
 erzeugt und verschlüsselt gespeichert. Er wird weder geloggt noch vom Status-
@@ -192,17 +193,18 @@ geschützt. Auf Windows gelten die ACLs des gewählten Config-Verzeichnisses.
 Keyring, Datenbank, Credentials und vollständige Backup-Archive dürfen nicht in
 den späteren Diagnostics-Export gelangen.
 
-Die einzige REST-Route ist aktuell `GET /api/v1/system/status`, ohne Credentials
-exakt `{"status":"ok"}` und `Cache-Control: no-store`. Nicht implementierte
-API-Routen liefern 404, auch wenn später der SPA-Fallback aktiv ist. Nur
+Der einzige anonyme Systemzustand ist `GET /api/v1/system/status`, ohne Credentials
+exakt `{"status":"ok"}` und `Cache-Control: no-store`. Setup-, Login-, CSRF- und
+signierte Medienrouten besitzen eng begrenzte anonyme Aufgaben. Nicht implementierte
+API-Routen liefern 404, auch wenn der SPA-Fallback aktiv ist. Nur
 `wwwroot` wird statisch ausgeliefert; `/config`, `/downloads` und `/roms` nicht.
 Die Produktionspipeline kopiert Frontend-Assets vor `dotnet publish` in
 `wwwroot`. Die API und die Assets teilen denselben Origin.
 
 Logs rotieren größenbasiert: `ludus.txt` mit 10 MiB / 10 Dateien und
 `ludus.debug.txt` mit 20 MiB / 5 Dateien. EF Sensitive-Data-Logging und
-HTTP-Request-Logging sind nicht aktiviert. Die bereinigte Diagnostik gehört
-zu Schritt 4; sie ist noch kein vorhandener Export-Endpunkt.
+HTTP-Request-Logging sind nicht aktiviert. Der Diagnose-Export bereinigt Secrets,
+Credential-Parameter, URLs und lokale Basispfade.
 
 ## Lokal bauen und prüfen
 

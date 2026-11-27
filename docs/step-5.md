@@ -7,6 +7,7 @@ Die Oberfläche verwendet React, TypeScript, React Router, Vite, Tailwind CSS un
 | Route | Funktionen |
 | --- | --- |
 | `/` | Poster- und Tabellenansicht, Suchfeld, Plattform-/Root-Folder-/Status-/DAT-Filter, serverseitige Seitennavigation und gezielter Library-Scan |
+| `/calendar` | Wochenansicht mit konfigurierbarem Wochenanfang/Spaltenformat und Kennzeichnung ungenauer Termine |
 | `/add` | Verzögerte Metadatensuche, IGDB/ScreenScraper/Plattform-Standard, manuelle Erfassung, Root Folder, Profil und Monitoring |
 | `/games/:id` | Metadaten und Cover, Base/Update/DLC-Dateien, Hashes, DAT-Status, signierter ROM-Download, Verlauf und interaktive Suche mit aufklappbaren Ablehnungsgründen |
 | `/activity` | Live-Warteschlange mit Fortschritt, Geschwindigkeit, ETA und Entfernen eines Auftrags |
@@ -14,28 +15,30 @@ Die Oberfläche verwendet React, TypeScript, React Router, Vite, Tailwind CSS un
 | `/activity/blocklist` | Permanente Sperren und Cooldowns einschließlich Entfernen |
 | `/settings/media` | Root Folders, Naming-Schema, Hardlinks, Papierkorb, Archivgrenzen und Plattformen einschließlich Monitoring aller zugehörigen Spiele |
 | `/settings/dat` | Plattformbezogener DAT-Upload, Aktivieren/Deaktivieren und Entfernen |
-| `/settings/profiles` | Mindest-Score, Upgrade-Cutoff, Regionen, Ausschlüsse, Format-Gewichtungen und vollständiger Regel-Editor |
-| `/settings/indexers` | Torznab/Newznab, Kategorien, Protokoll, Suchoptionen, Credentials und Verbindungstest |
-| `/settings/clients` | qBittorrent/Transmission/SABnzbd, Kategorie `ludus`, Import-Tags, Auftragsbereinigung und Remote Path Mappings |
-| `/settings/metadata` | Verschlüsselte Provider-Zugangsdaten, Cache-Dauer, Verbindungstest und System-ID-Liste; Plattform-Priorität unter Medienverwaltung |
-| `/settings/connect` | Webhooks, Ereignisauswahl und Testnachricht |
-| `/settings/general` | Allgemeine Einstellungen, Zeitpläne, Forms-Login, private Proxy-Netze sowie API-Key-Anzeige und -Reset |
+| `/settings/profiles` | Plattformgebundene Profile, Mindest-Score, Upgrade-Cutoff, Regionen, Ausschlüsse und Format-Gewichtungen |
+| `/settings/formats` | Wiederverwendbare Custom Formats mit vollständigem Regel-Editor |
+| `/settings/indexers` | Torznab/Newznab, Mindestalter, Maximalgröße, RSS-Intervall, Kategorien, Protokoll, Credentials und Verbindungstest |
+| `/settings/clients` | qBittorrent/Transmission/SABnzbd, Completed Download Handling, getrennte Ersatzsuche, Kategorie `ludus`, Bereinigung und Remote Path Mappings |
+| `/settings/metadata` | Bevorzugte Metadatensprache, verschlüsselte Provider-Zugangsdaten, Cache-Dauer, Verbindungstest und System-ID-Liste |
+| `/settings/connect` | Mehrere Discord-/Gotify-/Telegram-/generische Webhooks, Ereignisauswahl und Testnachricht |
+| `/settings/ui` | Kalender, kurze/lange Datums- und Zeitformate, Light/Dark/Auto sowie Deutsch/Englisch |
+| `/settings/general` | Allgemeine Einstellungen, Forms-/Basic-Login, private Proxy-Netze sowie Integrations-API-Key-Anzeige und -Reset |
 | `/system` | Systeminformationen und Health-Warnungen |
 | `/system/tasks` | Aufgaben aktivieren/deaktivieren, manuell starten und Ausführungsverlauf |
 | `/system/backups` | Erstellen, herunterladen, validiert importieren, löschen und Wiederherstellung vorbereiten |
 | `/system/logs` | Logdatei-/Level-/Textfilter, optionale Aktualisierung und bereinigtes Diagnose-ZIP |
 
-Die Oberfläche ist deutsch/englisch übersetzbar. Die Schaltfläche `DE`/`EN` speichert die persönliche Browser-Auswahl. Ohne persönliche Auswahl gilt nach der Anmeldung die konfigurierte Standardsprache. Technische Werte wie Release-Namen, Provider-Bezeichnungen und Original-Logs werden unverändert angezeigt.
+Die Oberfläche ist deutsch/englisch übersetzbar. Die gespeicherte UI-Sprache ist von der bevorzugten Metadatensprache getrennt. Technische Werte wie Release-Namen, Provider-Bezeichnungen und Original-Logs werden unverändert angezeigt.
 
 ## Anmeldung und Secrets
 
-- Beim ersten Start dient `/config/bootstrap-api-key` im Container als Zugang für die Browser-Anmeldung. Nativ befindet sich die Datei im konfigurierten Konfigurationsverzeichnis.
-- Der Browser tauscht den eingegebenen API-Key oder Benutzername/Passwort gegen die bestehende HttpOnly-Cookie-Session aus. Er speichert keine Credentials in Local Storage oder Session Storage.
+- Beim ersten Start richtet der Browser ein Administratorkonto ein. Forms verwendet die Ludus-Seite und ein HttpOnly-Cookie; Basic verwendet den nativen Browserdialog. Der API-Key ist ausschließlich für externe `X-Api-Key`-Integrationen vorgesehen.
+- Bei einer API-Key-only-Altinstanz verlangt der Browser zusätzlich den lokalen Einmalcode aus `/config/account-setup-token`. Ein anonymer Besucher kann das Konto ohne Dateisystemzugriff nicht übernehmen.
 - Jeder schreibende API-Aufruf erhält einen CSRF-Header. Nach Anmeldung und Schlüsselwechsel wird der Token erneut bezogen. Fehlgeschlagene Schreibaktionen werden nicht automatisch wiederholt.
 - Bei gespeicherten Secrets gibt es drei explizite Aktionen: unverändert lassen (`null`), ersetzen (neuer Wert) oder löschen (`""`). Der Server liefert ausschließlich die Konfiguriert-Flags zurück.
 - Formular-Payloads enthalten nur die erlaubten Request-Felder. IDs, Versionsinformationen und andere gelesene Datenbankfelder werden nicht zurückgeschrieben.
 - Cover und ROMs verwenden kurzlebige signierte URLs. Cover werden bei Bedarf geladen und ihre Links rechtzeitig erneuert. API-Keys werden nicht in Medien-URLs oder Bild-Tags eingesetzt.
-- Sicherheitsänderungen widerrufen alle Sitzungen. Ein API-Key-Reset aktualisiert die aktuelle Browser-Sitzung mit dem neuen Key und verbindet SignalR erneut. Externe Anwendungen müssen ihren Key ebenfalls aktualisieren.
+- Sicherheitsänderungen widerrufen alle Sitzungen und verbinden SignalR nach erneuter Anmeldung. Ein API-Key-Reset erfordert eine erneute Browseranmeldung; externe Anwendungen müssen ihren Key ebenfalls aktualisieren.
 - Entfernen und Wiederherstellen verwenden Bestätigungsdialoge. Ein Webhook-Test sendet tatsächlich eine Nachricht; ein Verbindungstest nutzt die zuvor gespeicherte Konfiguration.
 
 ## Echtzeit und Fehlerbehandlung
@@ -116,7 +119,7 @@ Standardmäßig wird der lokal installierte Edge verwendet. Alternativ lässt si
 
 Getestete Browser-Abläufe: Cookie-/Forms-Anmeldung, SignalR-Verbindung, Spielverwaltung, DAT-Import und Scan, Prüfsummen, signierter ROM-Download, sämtliche Ansichten, Custom Formats/Profil-Scores, allgemeine Einstellungen, DE/EN, mobile Navigation, Backup-Erstellung/-Download/-Import, Diagnose-Export und API-Key-Rotation.
 
-Abschlussprüfung vom 24.11.2026: 12 Frontend-Tests, 4 Playwright-Tests und 132 Backend-Tests bestanden. TypeScript-/Vite-Build und Formatprüfung erfolgreich; .NET-Build ohne Warnungen und Fehler; keine ausstehenden EF-Modelländerungen. Der Bibliotheksablauf wurde zusätzlich über den Vite-Proxy geprüft. Desktop- und Mobilansichten wurden anhand echter Browser-Screenshots kontrolliert.
+Abschlussprüfung vom 27.11.2026: 12 Frontend-Tests, 8 Playwright-Abläufe und 146 Backend-Tests bestanden. TypeScript-/Vite-Produktionsbuild und Formatprüfung waren erfolgreich; der .NET-Release-Build lief ohne Warnungen und Fehler, und es bestehen keine ausstehenden EF-Modelländerungen. Die Browserprüfung nutzte eine isolierte Produktionsauslieferung und kontrollierte Desktop-/Mobilansichten, Konto-Setup, Forms-Login, SignalR, Profile/Formate, Kalender/UI-Routen, Live-Datumsvorschau sowie Light/Dark/Auto.
 
 Externe Provider, Indexer, Download-Clients und Webhooks benötigen eigene Zugangsdaten. Die Browserprüfung führt keine echten externen Downloads oder Webhook-Nachrichten aus. Der Restore-Dialog nutzt den validierten Restore-Endpunkt aus Schritt 4; ein vollständiger Restore benötigt anschließend den Neustart durch Docker/systemd oder einen manuellen Start.
 

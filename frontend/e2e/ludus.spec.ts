@@ -10,6 +10,8 @@ let rootId: number;
 let platformId: number;
 let profileId: number;
 const title = `Ludus Test ${Date.now()}`;
+const administrator = 'ludus-e2e';
+const administratorPassword = 'Ludus-e2e-password-2026';
 async function authorized(request: APIRequestContext, path: string, method = 'GET', data?: unknown) {
   const response = await request
     .fetch(`/api/v1/${path}`, {
@@ -25,18 +27,56 @@ async function authorized(request: APIRequestContext, path: string, method = 'GE
 }
 async function signIn(page: Page) {
   await page.goto('/');
-  await page.getByLabel('API-Key', { exact: true }).fill(key);
-  await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
+  const setup = page.getByRole('heading', { name: 'Administratorkonto einrichten', exact: true });
+  const login = page.getByRole('heading', { name: 'Willkommen zurück.', exact: true });
+  await expect(setup.or(login)).toBeVisible();
+  if (await setup.isVisible().catch(() => false)) {
+    await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
+    await page.getByLabel('Passwort (mindestens 12 Zeichen)', { exact: true }).fill(administratorPassword);
+    await page.getByLabel('Passwort wiederholen', { exact: true }).fill(administratorPassword);
+    await page.getByLabel('Anmeldemethode', { exact: true }).selectOption('Forms');
+    await page.getByRole('button', { name: 'Konto erstellen', exact: true }).click();
+  } else {
+    await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
+    await page.getByLabel('Passwort', { exact: true }).fill(administratorPassword);
+    await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
+  }
   await expect(page.getByRole('heading', { name: 'Bibliothek', exact: true })).toBeVisible();
   await expect(page.getByText('Live verbunden', { exact: true })).toBeVisible();
 }
 test.beforeAll(async ({ request }) => {
   if (!directory) return;
-  key = (await readFile(join(directory, 'config/bootstrap-api-key'), 'utf8')).trim();
+  const persistedKey = join(directory, 'e2e-api-key');
+  key = (
+    await readFile(join(directory, 'config/bootstrap-api-key'), 'utf8').catch(() =>
+      readFile(persistedKey, 'utf8'),
+    )
+  ).trim();
+  await writeFile(persistedKey, key, { mode: 0o600 });
   const platforms = (await authorized(request, 'platforms')) as { id: number; slug: string }[];
   platformId = platforms.find((item) => item.slug === 'nes')!.id;
-  const profiles = (await authorized(request, 'profiles')) as { profile: { id: number } }[];
-  profileId = profiles[0].profile.id;
+  const profiles = (await authorized(request, 'profiles')) as {
+    profile: { id: number; platformId: number };
+  }[];
+  profileId = profiles.find((item) => item.profile.platformId === platformId)?.profile.id ?? 0;
+  if (!profileId) {
+    const profile = await authorized(request, 'profiles', 'POST', {
+      name: 'NES E2E',
+      platformId,
+      minimumScore: 0,
+      allowUpgrades: true,
+      upgradeUntilScore: 100,
+      allowedRegions: [],
+      excludedRegions: [],
+      rejectBeta: true,
+      rejectDemo: true,
+      rejectPrototype: true,
+      allowUpdates: true,
+      allowDlc: true,
+      formats: [],
+    });
+    profileId = profile.id;
+  }
   const path = resolve(directory, `roms/e2e-${Date.now()}`);
   await mkdir(path, { recursive: true });
   const root = await authorized(request, 'root-folders', 'POST', { name: title, path });
@@ -131,12 +171,15 @@ test('production library, DAT scan, signed ROM download and all configuration ro
     '/activity',
     '/activity/history',
     '/activity/blocklist',
+    '/calendar',
     '/settings/media',
     '/settings/profiles',
+    '/settings/formats',
     '/settings/indexers',
     '/settings/clients',
     '/settings/metadata',
     '/settings/connect',
+    '/settings/ui',
     '/settings/general',
     '/system',
     '/system/tasks',
@@ -263,7 +306,7 @@ test('search results, grouped files and administration layouts at desktop and ph
       await refresh;
       await page.screenshot({ path: info.outputPath('queue-' + width + '.png'), animations: 'disabled' });
       await page.goto('/settings');
-      await expect(main.getByRole('link')).toHaveCount(8);
+      await expect(main.getByRole('link')).toHaveCount(10);
       await page.screenshot({ path: info.outputPath('settings-' + width + '.png'), animations: 'disabled' });
       await main.getByRole('link', { name: /Medienverwaltung/ }).click();
       await expect(main.getByRole('heading', { name: 'Root Folders' })).toBeVisible();
@@ -306,13 +349,9 @@ test('backup download/import and API key rotation preserve a usable browser sess
   const rotated = await rotatedResponse;
   expect(rotated.ok()).toBeTruthy();
   key = (await rotated.json()).apiKey;
-  if (directory) await writeFile(join(directory, 'config/bootstrap-api-key'), key, { mode: 0o600 });
-  await expect(page.getByRole('dialog')).not.toBeVisible();
-  await expect(page.getByLabel('API-Key', { exact: true })).toHaveValue(key);
-  await expect(page.getByText('Live verbunden', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Verbergen', exact: true }).click();
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Bibliothek', exact: true })).toBeVisible();
+  if (directory) await writeFile(join(directory, 'e2e-api-key'), key, { mode: 0o600 });
+  await expect(page.getByRole('heading', { name: 'Willkommen zurück.', exact: true })).toBeVisible();
+  await signIn(page);
   const diagnosticsPromise = page.waitForEvent('download');
   await page.goto('/system/logs');
   await page.getByRole('link', { name: 'Diagnose-ZIP', exact: true }).click();
@@ -321,14 +360,16 @@ test('backup download/import and API key rotation preserve a usable browser sess
 
 test('configuration writes and responsive English navigation', async ({ page }, info) => {
   await signIn(page);
-  await page.goto('/settings/profiles');
+  await page.goto('/settings/formats');
   await page.getByRole('button', { name: 'Format hinzufügen', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(`${title} Europe`);
   await page.getByRole('dialog').getByLabel('Wert', { exact: true }).fill('Europe');
   await page.getByRole('dialog').getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(page.getByRole('cell', { name: `${title} Europe`, exact: true })).toBeVisible();
+  await page.goto('/settings/profiles');
   await page.getByRole('button', { name: 'Profil hinzufügen', exact: true }).click();
   await page.getByRole('dialog').getByLabel('Name', { exact: true }).fill(`${title} Quality`);
+  await page.getByRole('dialog').getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
   await page.getByRole('dialog').getByRole('button', { name: 'Format hinzufügen', exact: true }).click();
   await page
     .getByRole('dialog')
@@ -392,21 +433,24 @@ test('security changes end the old session and forms login uses the updated conf
   try {
     await signIn(page);
     await page.goto('/settings/general');
-    await page.getByLabel('Benutzeranmeldung aktivieren', { exact: true }).check();
-    await page.getByLabel('Benutzername', { exact: true }).fill('ludus-e2e');
+    await page.getByLabel('Anmeldemethode', { exact: true }).selectOption('Forms');
+    await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
     await page.getByLabel('Neues Passwort (leer = unverändert)', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Sicherheitseinstellungen speichern', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Bestätigen', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Willkommen zurück.', exact: true })).toBeVisible();
-    await page.getByLabel('Benutzername', { exact: true }).fill('ludus-e2e');
+    await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
     await page.getByLabel('Passwort', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Einstellungen', exact: true })).toBeVisible();
     await expect(page.getByText('Live verbunden', { exact: true })).toBeVisible();
   } finally {
-    await authorized(request, 'auth/security', 'PUT', { ...original, password: null });
-    if (!original.formsAuthenticationEnabled && directory)
-      await writeFile(join(directory, 'config/bootstrap-api-key'), key, { mode: 0o600 });
+    await authorized(request, 'auth/security', 'PUT', {
+      ...original,
+      username: administrator,
+      authenticationMethod: 'Forms',
+      password: administratorPassword,
+    });
   }
 });
 
@@ -575,4 +619,32 @@ test('settings tiles, contextual navigation and aligned fields', async ({ page }
   expect(mobileField.y).toBeGreaterThanOrEqual(mobileLabel.y + mobileLabel.height);
   expect(mobileField.x + mobileField.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: info.outputPath('general-mobile.png') });
+});
+
+test('UI date preview and light, dark, and automatic themes react immediately', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/settings/ui');
+  const dates = page.locator('section.settings-section').filter({
+    has: page.getByRole('heading', { name: 'Datumsanzeige', exact: true }),
+  });
+  await dates.getByLabel('Kurzes Datumsformat', { exact: true }).selectOption('yyyy-MM-dd');
+  await expect(dates.getByText(/2026-11-23/)).toBeVisible();
+
+  const appearance = page.locator('section.settings-section').filter({
+    has: page.getByRole('heading', { name: 'Darstellung', exact: true }),
+  });
+  const appearanceForm = await appearance.locator('form').getAttribute('id');
+  const saveAppearance = () => page.locator(`button[form="${appearanceForm}"]`).click();
+  await appearance.getByLabel('Darstellung', { exact: true }).selectOption('Dark');
+  await saveAppearance();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await appearance.getByLabel('Darstellung', { exact: true }).selectOption('Light');
+  await saveAppearance();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await appearance.getByLabel('Darstellung', { exact: true }).selectOption('Auto');
+  await saveAppearance();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });

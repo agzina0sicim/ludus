@@ -50,6 +50,15 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     );
 }
 export const useLocale = () => useContext(LocaleContext);
+type DisplaySettings = { shortDateFormat: string; longDateFormat: string; use12HourTime: boolean };
+let displaySettings: DisplaySettings = {
+    shortDateFormat: 'dd.MM.yyyy',
+    longDateFormat: 'dddd, d. MMMM yyyy',
+    use12HourTime: false,
+};
+export function configureDisplaySettings(value: Partial<DisplaySettings>) {
+    displaySettings = { ...displaySettings, ...value };
+}
 const labels: Record<string, [string, string]> = {
     Missing: ['Fehlend', 'Missing'],
     Downloading: ['Herunterladend', 'Downloading'],
@@ -75,6 +84,7 @@ const labels: Record<string, [string, string]> = {
     Grabbed: ['Download gestartet', 'Grabbed'],
     Upgraded: ['Upgrade importiert', 'Upgraded'],
     DownloadFailed: ['Download fehlgeschlagen', 'Download failed'],
+    ImportFailed: ['Import fehlgeschlagen', 'Import failed'],
     Deleted: ['Entfernt', 'Deleted'],
     Renamed: ['Umbenannt', 'Renamed'],
     Verified: ['Verifiziert', 'Verified'],
@@ -94,6 +104,18 @@ const labels: Record<string, [string, string]> = {
     RecyclingCleanup: ['Papierkorb bereinigen', 'Recycling cleanup'],
     Igdb: ['IGDB', 'IGDB'],
     ScreenScraper: ['ScreenScraper.fr', 'ScreenScraper.fr'],
+    Discord: ['Discord-Webhook', 'Discord webhook'],
+    Gotify: ['Gotify', 'Gotify'],
+    Telegram: ['Telegram-Bot', 'Telegram bot'],
+    Generic: ['Generischer HTTP-Webhook', 'Generic HTTP webhook'],
+    Forms: ['Forms (Ludus-Anmeldeseite)', 'Forms (Ludus sign-in page)'],
+    Basic: ['Basic (Browserdialog)', 'Basic (browser dialog)'],
+    Light: ['Hell', 'Light'],
+    Dark: ['Dunkel', 'Dark'],
+    Auto: ['Automatisch', 'Auto'],
+    ShortWeekday: ['Mo', 'Mon'],
+    ShortWeekdayDate: ['Mo 23.11.', 'Mon 11/23'],
+    LongWeekday: ['Montag', 'Monday'],
     QBittorrent: ['qBittorrent', 'qBittorrent'],
     Sabnzbd: ['SABnzbd', 'SABnzbd'],
     All: ['Alle Regeln', 'All rules'],
@@ -121,10 +143,44 @@ export function bytes(value: number | null | undefined, locale = 'de') {
     const unit = Math.min(4, Math.max(0, Math.floor(Math.log(Math.max(1, value)) / Math.log(1024))));
     return `${new Intl.NumberFormat(locale, { maximumFractionDigits: unit ? 1 : 0 }).format(value / 1024 ** unit)} ${['B', 'KiB', 'MiB', 'GiB', 'TiB'][unit]}`;
 }
-export function date(value: unknown, locale: string) {
+export function dateOnly(
+    value: unknown,
+    locale: string,
+    style: 'short' | 'long' = 'long',
+    settings: DisplaySettings = displaySettings,
+) {
     if (!value) return '—';
     const parsed = new Date(String(value));
-    return Number.isNaN(parsed.valueOf())
-        ? '—'
-        : new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(parsed);
+    if (Number.isNaN(parsed.valueOf())) return '—';
+    const shortOptions: Intl.DateTimeFormatOptions =
+        settings.shortDateFormat === 'yyyy-MM-dd'
+            ? { year: 'numeric', month: '2-digit', day: '2-digit' }
+            : settings.shortDateFormat === 'MM/dd/yyyy'
+              ? { year: 'numeric', month: '2-digit', day: '2-digit' }
+              : { day: '2-digit', month: '2-digit', year: 'numeric' };
+    const longOptions: Intl.DateTimeFormatOptions = settings.longDateFormat.startsWith('dddd')
+        ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+        : settings.longDateFormat.startsWith('MMMM')
+          ? { month: 'long', day: 'numeric', year: 'numeric' }
+          : { day: 'numeric', month: 'long', year: 'numeric' };
+    let formatted = new Intl.DateTimeFormat(locale, style === 'short' ? shortOptions : longOptions).format(
+        parsed,
+    );
+    if (style === 'short' && settings.shortDateFormat === 'yyyy-MM-dd')
+        formatted = `${parsed.getFullYear().toString().padStart(4, '0')}-${(parsed.getMonth() + 1).toString().padStart(2, '0')}-${parsed.getDate().toString().padStart(2, '0')}`;
+    return formatted;
+}
+export function timeOnly(value: unknown, locale: string, settings: DisplaySettings = displaySettings) {
+    if (!value) return '—';
+    const parsed = new Date(String(value));
+    if (Number.isNaN(parsed.valueOf())) return '—';
+    return new Intl.DateTimeFormat(locale, {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: settings.use12HourTime,
+    }).format(parsed);
+}
+export function date(value: unknown, locale: string, style: 'short' | 'long' = 'long') {
+    const formatted = dateOnly(value, locale, style);
+    return style === 'long' && formatted !== '—' ? `${formatted} · ${timeOnly(value, locale)}` : formatted;
 }

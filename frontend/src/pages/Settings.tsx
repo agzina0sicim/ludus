@@ -1,9 +1,9 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Save } from 'lucide-react';
-import { api, login, resetCsrf } from '../api';
+import { api, resetCsrf } from '../api';
 import { useResource } from '../hooks';
-import { date, useLabel, useLocale } from '../i18n';
+import { date, dateOnly, timeOnly, useLabel, useLocale } from '../i18n';
 import { CrudSection, Editor, Fields, payload, type FormField, type Values } from '../forms';
 import { SettingsLayout, SettingsActions } from '../SettingsToolbar';
 import * as schema from '../settings-schema';
@@ -20,11 +20,13 @@ export default function SettingsPage() {
                     <Route index element={<SettingsDirectory />} />
                     <Route path="media" element={<MediaSettings />} />
                     <Route path="dat" element={<DatSettings />} />
-                    <Route path="profiles" element={<ProfileSettings />} />
+                    <Route path="profiles" element={<ProfileSettings view="profiles" />} />
+                    <Route path="formats" element={<ProfileSettings view="formats" />} />
                     <Route path="indexers" element={<Indexers />} />
                     <Route path="clients" element={<Clients />} />
                     <Route path="metadata" element={<MetadataSettings />} />
                     <Route path="connect" element={<ConnectSettings />} />
+                    <Route path="ui" element={<UiSettings />} />
                     <Route path="general" element={<GeneralSettings />} />
                     <Route path="*" element={<Navigate replace to="/settings/media" />} />
                 </Routes>
@@ -48,6 +50,9 @@ function SettingsDirectory() {
 function MediaSettings() {
     const { t } = useLocale();
     const [monitor, setMonitor] = useState<Row>();
+    const capabilities = useResource<{ permissionsSupported: boolean; permissionPlatform: string }>(
+        'settings/capabilities',
+    );
     return (
         <>
             <CrudSection
@@ -72,6 +77,17 @@ function MediaSettings() {
                     'Tokens: {RootFolder}, {Game Title}, {Year}, {Region}, {ext}. Hardlinks retain torrent files for seeding.',
                 )}
             />
+            <p className="hint">
+                {capabilities.data?.permissionsSupported
+                    ? t(
+                          'Datei- und Ordnerrechte sowie die optionale Gruppe wirken auf diesem Linux-System. Bei Hardlinks bleiben Dateirechte und Gruppe unverändert, damit die Quelldatei nicht verändert wird.',
+                          'File and directory permissions and the optional group are active on this Linux system. For hardlinks, file mode and group remain unchanged so the source is not modified.',
+                      )
+                    : t(
+                          'Dateirechte und Mediengruppe sind auf diesem System nicht verfügbar; die Prozess-UMASK gilt.',
+                          'File permissions and media group are unavailable on this system; the process umask applies.',
+                      )}
+            </p>
             <CrudSection
                 title={t('Plattformen', 'Platforms')}
                 endpoint="platforms"
@@ -109,7 +125,17 @@ function MediaSettings() {
         </>
     );
 }
-function SettingsForm({ title, fields, hint }: { title: string; fields: FormField[]; hint?: string }) {
+function SettingsForm({
+    title,
+    fields,
+    hint,
+    preview,
+}: {
+    title: string;
+    fields: FormField[];
+    hint?: string;
+    preview?: (values: Values) => ReactNode;
+}) {
     const { t, setLocale } = useLocale();
     const formId = useId();
     const data = useResource<Row>('settings');
@@ -148,7 +174,20 @@ function SettingsForm({ title, fields, hint }: { title: string; fields: FormFiel
                             const merged = { ...current, ...changes };
                             await api('settings', {
                                 method: 'PUT',
-                                body: payload([...schema.mediaFields, ...schema.generalFields], merged),
+                                body: payload(
+                                    [
+                                        ...schema.mediaFields,
+                                        ...schema.generalFields,
+                                        ...schema.metadataLanguageFields,
+                                        ...schema.indexerPolicyFields,
+                                        ...schema.downloadHandlingFields,
+                                        ...schema.calendarFields,
+                                        ...schema.dateDisplayFields,
+                                        ...schema.appearanceFields,
+                                        ...schema.languageFields,
+                                    ],
+                                    merged,
+                                ),
                             });
                             setChanges({});
                             if ('language' in changes) setLocale(merged.language === 'en' ? 'en' : 'de');
@@ -173,6 +212,7 @@ function SettingsForm({ title, fields, hint }: { title: string; fields: FormFiel
                                 setChanges(changed);
                             }}
                         />
+                        {preview?.({ ...data.data, ...changes })}
                     </fieldset>
                 </form>
             ) : (
@@ -184,30 +224,41 @@ function SettingsForm({ title, fields, hint }: { title: string; fields: FormFiel
 function Indexers() {
     const { t } = useLocale();
     return (
-        <CrudSection
-            title={t('Indexer', 'Indexers')}
-            description={t(
-                'Prowlarr, Jackett und Newznab. Neue Einstellungen vor dem Test speichern. Newznab verwendet Usenet.',
-                'Prowlarr, Jackett, and Newznab. Save changes before testing. Newznab uses Usenet.',
-            )}
-            cards
-            endpoint="indexers"
-            fields={schema.indexerFields}
-            defaults={schema.indexerDefaults}
-            columns={[
-                { key: 'name', label: 'Name' },
-                { key: 'kind', label: t('Typ', 'Type') },
-                { key: 'baseUrl', label: 'URL' },
-                { key: 'enableRss', label: 'RSS' },
-            ]}
-            testEndpoint={(row) => `indexers/${row.id}/test`}
-        />
+        <>
+            <SettingsForm title={t('Auswahl & RSS', 'Selection & RSS')} fields={schema.indexerPolicyFields} />
+            <CrudSection
+                title={t('Indexer', 'Indexers')}
+                description={t(
+                    'Prowlarr, Jackett und Newznab. Neue Einstellungen vor dem Test speichern. Newznab verwendet Usenet.',
+                    'Prowlarr, Jackett, and Newznab. Save changes before testing. Newznab uses Usenet.',
+                )}
+                cards
+                endpoint="indexers"
+                fields={schema.indexerFields}
+                defaults={schema.indexerDefaults}
+                columns={[
+                    { key: 'name', label: 'Name' },
+                    { key: 'kind', label: t('Typ', 'Type') },
+                    { key: 'baseUrl', label: 'URL' },
+                    { key: 'enableRss', label: 'RSS' },
+                ]}
+                testEndpoint={(row) => `indexers/${row.id}/test`}
+            />
+        </>
     );
 }
 function Clients() {
     const { t } = useLocale();
     return (
         <>
+            <SettingsForm
+                title="Completed Download Handling"
+                fields={schema.downloadHandlingFields}
+                hint={t(
+                    'Bei deaktiviertem automatischem Import bleiben Statusanzeige und manueller Import in der Warteschlange verfügbar.',
+                    'When automatic import is disabled, status and manual import remain available in the queue.',
+                )}
+            />
             <CrudSection
                 title={t('Download-Clients', 'Download clients')}
                 description={t(
@@ -249,6 +300,14 @@ function MetadataSettings() {
     const [systems, setSystems] = useState<{ provider: string; items: { id: number; name: string }[] }>();
     return (
         <>
+            <SettingsForm
+                title={t('Metadatensprache', 'Metadata language')}
+                fields={schema.metadataLanguageFields}
+                hint={t(
+                    'Diese Auswahl ist unabhängig von der Sprache der Oberfläche. Feldweise Fallbacks bleiben in den Spieldetails sichtbar.',
+                    'This selection is independent of the interface language. Per-field fallbacks remain visible in game details.',
+                )}
+            />
             <CrudSection
                 title={t('Metadaten-Provider', 'Metadata providers')}
                 description={t(
@@ -482,11 +541,12 @@ function DatSettings() {
 }
 type FormatScore = { customFormatId: number; score: number };
 type FormatRule = { field: string; operator: string; value: string; negate: boolean; required: boolean };
-function ProfileSettings() {
+function ProfileSettings({ view }: { view: 'profiles' | 'formats' }) {
     const { t } = useLocale();
     const label = useLabel();
     const profiles = useResource<Profile[]>('profiles');
     const formats = useResource<Row[]>('custom-formats');
+    const platforms = useResource<Platform[]>('platforms');
     const [editProfile, setEditProfile] = useState<Values>();
     const [editFormat, setEditFormat] = useState<Values>();
     const [remove, setRemove] = useState<{ path: string; name: string }>();
@@ -498,8 +558,8 @@ function ProfileSettings() {
         required: false,
     };
     return (
-        <>
-            <section className="settings-section">
+        <div className={`profile-settings-view ${view}`}>
+            <section className="settings-section profiles-section">
                 <div className="section-heading">
                     <div>
                         <h2>{t('Qualitätsprofile', 'Quality profiles')}</h2>
@@ -514,6 +574,7 @@ function ProfileSettings() {
                         onClick={() =>
                             setEditProfile({
                                 name: '',
+                                platformId: platforms.data?.[0]?.id ?? '',
                                 minimumScore: 0,
                                 allowUpgrades: true,
                                 upgradeUntilScore: 100,
@@ -560,6 +621,13 @@ function ProfileSettings() {
                             </div>
                             <dl className="facts">
                                 <div>
+                                    <dt>{t('Plattform', 'Platform')}</dt>
+                                    <dd>
+                                        {platforms.data?.find((x) => x.id === profile.platformId)?.name ??
+                                            `#${profile.platformId}`}
+                                    </dd>
+                                </div>
+                                <div>
                                     <dt>{t('Minimum', 'Minimum')}</dt>
                                     <dd>{profile.minimumScore}</dd>
                                 </div>
@@ -593,7 +661,7 @@ function ProfileSettings() {
                     ))}
                 </div>
             </section>
-            <section className="settings-section">
+            <section className="settings-section formats-section">
                 <div className="section-heading">
                     <h2>Custom Formats</h2>
                     <Button
@@ -650,7 +718,7 @@ function ProfileSettings() {
                     </table>
                 </div>
             </section>
-            {editProfile && (
+            {view === 'profiles' && editProfile && (
                 <Editor
                     title={t('Qualitätsprofil', 'Quality profile')}
                     initial={editProfile}
@@ -661,6 +729,7 @@ function ProfileSettings() {
                             method: editProfile.id ? 'PUT' : 'POST',
                             body: {
                                 ...payload(schema.profileFields, values),
+                                platformId: Number(values.platformId),
                                 formats: (values.formats as FormatScore[]).map((item) => ({
                                     customFormatId: Number(item.customFormatId),
                                     score: Number(item.score),
@@ -671,6 +740,24 @@ function ProfileSettings() {
                 >
                     {(values, setValues) => (
                         <div className="rule-editor">
+                            <Field label={t('Plattform', 'Platform')}>
+                                <select
+                                    required
+                                    value={String(values.platformId ?? '')}
+                                    onChange={(event) =>
+                                        setValues({ ...values, platformId: Number(event.target.value) })
+                                    }
+                                >
+                                    <option value="" disabled>
+                                        {t('Auswählen', 'Select')}
+                                    </option>
+                                    {platforms.data?.map((platform) => (
+                                        <option key={platform.id} value={platform.id}>
+                                            {platform.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
                             <h3>{t('Format-Scores', 'Format scores')}</h3>
                             {(values.formats as FormatScore[]).map((item, index) => (
                                 <div className="score-editor" key={index}>
@@ -768,7 +855,7 @@ function ProfileSettings() {
                     )}
                 </Editor>
             )}
-            {editFormat && (
+            {view === 'formats' && editFormat && (
                 <Editor
                     title="Custom Format"
                     initial={editFormat}
@@ -883,7 +970,7 @@ function ProfileSettings() {
                     onConfirm={() => api(remove.path, { method: 'DELETE' })}
                 />
             )}
-        </>
+        </div>
     );
 }
 function ConnectSettings() {
@@ -900,8 +987,8 @@ function ConnectSettings() {
                     <h2>{t('Benachrichtigungen', 'Notifications')}</h2>
                     <p className="muted">
                         {t(
-                            'Discord-kompatible Webhooks. Ein Test sendet eine echte Testnachricht.',
-                            'Discord-compatible webhooks. Testing sends a real test notification.',
+                            'Discord, Gotify, Telegram und generische HTTP-Webhooks. Ein Test sendet eine echte Testnachricht.',
+                            'Discord, Gotify, Telegram, and generic HTTP webhooks. Testing sends a real test notification.',
                         )}
                     </p>
                 </div>
@@ -909,8 +996,9 @@ function ConnectSettings() {
                     onClick={() =>
                         setEdit({
                             name: '',
+                            kind: 'Discord',
                             enabled: true,
-                            events: ['Grabbed', 'Imported', 'Upgraded', 'DownloadFailed'],
+                            events: ['Grabbed', 'Imported', 'ImportFailed', 'Upgraded', 'DownloadFailed'],
                         })
                     }
                 >
@@ -929,6 +1017,7 @@ function ConnectSettings() {
                         <thead>
                             <tr>
                                 <th>Name</th>
+                                <th>{t('Typ', 'Type')}</th>
                                 <th>{t('Ereignisse', 'Events')}</th>
                                 <th>Status</th>
                                 <th>{t('Aktionen', 'Actions')}</th>
@@ -938,6 +1027,7 @@ function ConnectSettings() {
                             {data.data?.map((item) => (
                                 <tr key={item.id}>
                                     <td>{String(item.name)}</td>
+                                    <td>{label(String(item.kind))}</td>
                                     <td>{(item.events as string[]).map(label).join(', ')}</td>
                                     <td>
                                         <Badge tone={item.enabled ? 'good' : ''}>
@@ -995,28 +1085,38 @@ function ConnectSettings() {
                     }
                 >
                     {(values, setValues) => (
-                        <fieldset className="events-fieldset">
-                            <legend>{t('Ereignisse', 'Events')}</legend>
-                            {['Grabbed', 'Imported', 'Upgraded', 'DownloadFailed'].map((event) => (
-                                <label key={event} className="check">
-                                    <input
-                                        type="checkbox"
-                                        checked={(values.events as string[]).includes(event)}
-                                        onChange={(e) =>
-                                            setValues({
-                                                ...values,
-                                                events: e.target.checked
-                                                    ? [...(values.events as string[]), event]
-                                                    : (values.events as string[]).filter(
-                                                          (item) => item !== event,
-                                                      ),
-                                            })
-                                        }
-                                    />
-                                    {label(event)}
-                                </label>
-                            ))}
-                        </fieldset>
+                        <>
+                            <fieldset className="events-fieldset">
+                                <legend>{t('Ereignisse', 'Events')}</legend>
+                                {['Grabbed', 'Imported', 'ImportFailed', 'Upgraded', 'DownloadFailed'].map(
+                                    (event) => (
+                                        <label key={event} className="check">
+                                            <input
+                                                type="checkbox"
+                                                checked={(values.events as string[]).includes(event)}
+                                                onChange={(e) =>
+                                                    setValues({
+                                                        ...values,
+                                                        events: e.target.checked
+                                                            ? [...(values.events as string[]), event]
+                                                            : (values.events as string[]).filter(
+                                                                  (item) => item !== event,
+                                                              ),
+                                                    })
+                                                }
+                                            />
+                                            {label(event)}
+                                        </label>
+                                    ),
+                                )}
+                            </fieldset>
+                            <details>
+                                <summary>
+                                    {t('Payload für generische Webhooks', 'Generic webhook payload')}
+                                </summary>
+                                <pre className="mono">{`{"eventType":"Imported","occurredAtUtc":"2026-11-27T12:00:00Z","game":{"title":"Example"},"release":{"title":"Example (Europe)"}}`}</pre>
+                            </details>
+                        </>
                     )}
                 </Editor>
             )}
@@ -1041,6 +1141,52 @@ function GeneralSettings() {
             />
             <SecuritySettings />
             <ApiKeySettings />
+        </>
+    );
+}
+function UiSettings() {
+    const { t, locale } = useLocale();
+    const example = new Date('2026-11-23T17:45:00Z');
+    return (
+        <>
+            <SettingsForm
+                title={t('Kalender', 'Calendar')}
+                fields={schema.calendarFields}
+                hint={t(
+                    'Die Wochenansicht verwendet exakte Veröffentlichungstage; ungenaue Jahresangaben werden gesondert gekennzeichnet.',
+                    'The week view uses exact release dates; imprecise year-only dates are marked separately.',
+                )}
+            />
+            <SettingsForm
+                title={t('Datumsanzeige', 'Date display')}
+                fields={schema.dateDisplayFields}
+                preview={(values) => {
+                    const display = {
+                        shortDateFormat: String(values.shortDateFormat),
+                        longDateFormat: String(values.longDateFormat),
+                        use12HourTime: Boolean(values.use12HourTime),
+                    };
+                    return (
+                        <div className="panel">
+                            <h3>{t('Vorschau', 'Preview')}</h3>
+                            <p>
+                                {dateOnly(example, locale, 'short', display)} ·{' '}
+                                {dateOnly(example, locale, 'long', display)} ·{' '}
+                                {timeOnly(example, locale, display)}
+                            </p>
+                        </div>
+                    );
+                }}
+            />
+            <SettingsForm title={t('Darstellung', 'Appearance')} fields={schema.appearanceFields} />
+            <SettingsForm
+                title={t('Sprache', 'Language')}
+                fields={schema.languageFields}
+                hint={t(
+                    'Die Metadatensprache bleibt bei einem Wechsel unverändert.',
+                    'The metadata language remains unchanged when switching.',
+                )}
+            />
         </>
     );
 }
@@ -1082,11 +1228,7 @@ function SecuritySettings() {
                             autoComplete="new-password"
                             minLength={12}
                             maxLength={1024}
-                            required={
-                                Boolean(values.formsAuthenticationEnabled) &&
-                                (!data.data.formsAuthenticationEnabled ||
-                                    values.username !== data.data.username)
-                            }
+                            required={values.username !== data.data.username}
                             value={password}
                             onChange={(event) => setPassword(event.target.value)}
                         />
@@ -1104,8 +1246,8 @@ function SecuritySettings() {
                 <Confirm
                     title={t('Speichern und abmelden?', 'Save and sign out?')}
                     text={t(
-                        'Alle Browser müssen sich danach neu anmelden. Stelle sicher, dass du den API-Key oder die neuen Zugangsdaten kennst.',
-                        'All browsers must sign in again. Make sure you have the API key or the new credentials.',
+                        'Alle Browser müssen sich danach neu anmelden. Basic zeigt den nativen Browserdialog und darf nur über HTTPS verwendet werden.',
+                        'All browsers must sign in again. Basic uses the native browser dialog and must only be used over HTTPS.',
                     )}
                     onClose={() => setConfirm(false)}
                     onConfirm={async () => {
@@ -1132,8 +1274,8 @@ function ApiKeySettings() {
             <h2>API-Key</h2>
             <p className="muted">
                 {t(
-                    'Für externe Dashboards im X-Api-Key-Header. Ein Reset widerruft den alten Key, alle Sitzungen und Medien-Links. Diese Sitzung wird mit dem neuen Key erneut angemeldet.',
-                    'Use the X-Api-Key header for external dashboards. Reset revokes the old key, all sessions, and media links. This browser signs in again using the new key.',
+                    'Ausschließlich für externe Integrationen im X-Api-Key-Header. Der Browser-Login verwendet immer das Administratorkonto. Ein Reset widerruft den alten Key, alle Sitzungen und Medien-Links.',
+                    'Only for external integrations through the X-Api-Key header. Browser sign-in always uses the administrator account. Reset revokes the old key, all sessions, and media links.',
                 )}
             </p>
             <div className="panel">
@@ -1185,14 +1327,14 @@ function ApiKeySettings() {
                             method: 'POST',
                         });
                         setKey(result.apiKey);
-                        await login({ apiKey: result.apiKey });
                         toast(
                             t(
                                 'Neuer API-Key erstellt. Externe Anwendungen jetzt aktualisieren.',
                                 'New API key created. Update external applications now.',
                             ),
                         );
-                        window.dispatchEvent(new Event('ludus:refresh'));
+                        resetCsrf();
+                        window.dispatchEvent(new Event('ludus:unauthorized'));
                     }}
                 />
             )}

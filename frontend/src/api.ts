@@ -68,7 +68,7 @@ export async function api<T = void>(path: string, options: RequestOptions = {}):
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
-export async function login(credentials: { apiKey?: string; username?: string; password?: string }) {
+export async function login(credentials: { username: string; password: string }) {
   resetCsrf();
   await api('auth/login', { method: 'POST', body: credentials });
   resetCsrf();

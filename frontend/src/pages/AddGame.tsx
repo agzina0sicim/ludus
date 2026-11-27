@@ -37,7 +37,11 @@ export default function AddGamePage() {
         setError(undefined);
     }
     const rootId = root || String(roots.data?.[0]?.id ?? '');
-    const profileId = profile || String(profiles.data?.[0]?.profile.id ?? '');
+    const matchingProfiles =
+        profiles.data?.filter((item) => Number(item.profile.platformId) === Number(platform)) ?? [];
+    const profileId = matchingProfiles.some((item) => String(item.profile.id) === profile)
+        ? profile
+        : String(matchingProfiles[0]?.profile.id ?? '');
     return (
         <section className="add-page">
             <h1 className="sr-only">{t('Spiel hinzufügen', 'Add game')}</h1>
@@ -218,7 +222,7 @@ export default function AddGamePage() {
                                     <option value="" disabled>
                                         {t('Profil auswählen', 'Choose profile')}
                                     </option>
-                                    {profiles.data?.map((item) => (
+                                    {matchingProfiles.map((item) => (
                                         <option key={item.profile.id} value={item.profile.id}>
                                             {item.profile.name} · Cutoff {item.profile.upgradeUntilScore}
                                         </option>

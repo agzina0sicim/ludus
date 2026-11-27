@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { Library, ListOrdered, LogOut, Menu, Search, Settings, ShieldCheck, User } from 'lucide-react';
+import {
+    CalendarDays,
+    Library,
+    ListOrdered,
+    LogOut,
+    Menu,
+    Search,
+    Settings,
+    ShieldCheck,
+    User,
+} from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocale } from './i18n';
 import { useSettingsSections } from './settings-sections';
@@ -174,6 +184,12 @@ export function SidebarNavigation({
                         </NavLink>
                     </>
                 )}
+            </div>
+            <div className={pathname === '/calendar' ? 'nav-group current' : 'nav-group'}>
+                <NavLink to="/calendar">
+                    <CalendarDays />
+                    {t('Kalender', 'Calendar')}
+                </NavLink>
             </div>
             <div className={pathname.startsWith('/settings') ? 'nav-group current' : 'nav-group'}>
                 <NavLink end to="/settings">

@@ -19,6 +19,7 @@ public sealed class TrackedDownload : Entity
     public ProtectedSecret? SourceUrl { get; set; }
     public DownloadProtocol Protocol { get; set; }
     public ContentKind ContentKind { get; set; }
+    public GrabOrigin Origin { get; set; }
     public DownloadStatus Status { get; set; }
     public int Score { get; set; }
     public long Size { get; set; }
@@ -33,4 +34,5 @@ public sealed class TrackedDownload : Entity
     public string? SubmissionToken { get; set; }
     public bool CleanupPending { get; set; }
     public bool ReplacementSearchPending { get; set; }
+    public DateTime? FailureHandledAtUtc { get; set; }
 }

@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Ludus.Domain.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 var paths = LudusPaths.FromConfiguration(builder.Configuration);
@@ -39,6 +40,7 @@ builder.Services.AddSingleton<InstanceLock>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ReleaseTickets>();
+builder.Services.AddSingleton<BasicPasswordAttemptLimiter>();
 builder.Services.AddSingleton<IRealtimePublisher, SignalRPublisher>();
 builder.Services.AddHostedService<AutomationWorker>();
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -90,7 +92,7 @@ try
         var security = await scope.ServiceProvider.GetRequiredService<AppDbContext>().SecuritySettings.SingleAsync(timeout.Token);
         var bootstrap = Path.Combine(paths.ConfigDirectory, "bootstrap-api-key");
         SafePaths.RejectLinks(bootstrap);
-        if (!security.FormsAuthenticationEnabled)
+        if (security.AccountSetupMode != AccountSetupMode.Complete)
         {
             var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write, Share = FileShare.None };
             if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;

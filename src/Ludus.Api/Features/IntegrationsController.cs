@@ -21,8 +21,9 @@ public sealed record ClientRequest([Required, MaxLength(128)] string Name, Downl
 public sealed record MappingRequest([Required, MaxLength(253)] string Host, [Required, MaxLength(4096)] string RemotePath, [Required, MaxLength(4096)] string LocalPath);
 public sealed record ProviderRequest(bool Enabled, [MaxLength(4096)] string? ClientId, [MaxLength(4096)] string? ClientSecret,
     [MaxLength(4096)] string? Username, [MaxLength(4096)] string? Password, [Range(1, 8760)] int CacheDurationHours);
-public sealed record WebhookRequest([Required, MaxLength(128)] string Name, [MaxLength(4096)] string? Url, [MaxLength(4096)] string? Authorization,
-    bool Enabled, [Required, MinLength(1), MaxLength(4)] List<NotificationEvent> Events);
+public sealed record WebhookRequest([Required, MaxLength(128)] string Name, WebhookKind Kind,
+    [MaxLength(4096)] string? Url, [MaxLength(4096)] string? Authorization, [MaxLength(4096)] string? Token,
+    [MaxLength(512)] string? Target, bool Enabled, [Required, MinLength(1), MaxLength(5)] List<NotificationEvent> Events);
 
 [ApiController, Route("api/v1")]
 public sealed class IntegrationsController(AppDbContext database, ISecretProtector secrets, IIndexerClient indexers,
@@ -168,6 +169,11 @@ public sealed class IntegrationsController(AppDbContext database, ISecretProtect
         ConfigurationSupport.Apply(request, item);
         item.Url = ConfigurationSupport.Secret(request.Url, item.Url, secrets) ?? throw new ArgumentException("Webhook URL required.");
         item.Authorization = ConfigurationSupport.Secret(request.Authorization, item.Authorization, secrets);
+        item.Token = ConfigurationSupport.Secret(request.Token, item.Token, secrets);
         item.Events = item.Events.Distinct().ToList();
+        if (request.Kind is WebhookKind.Gotify or WebhookKind.Telegram && item.Token is null)
+            throw new ArgumentException("A token is required for this connection type.");
+        if (request.Kind == WebhookKind.Telegram && string.IsNullOrWhiteSpace(request.Target))
+            throw new ArgumentException("A Telegram chat ID is required.");
     }
 }

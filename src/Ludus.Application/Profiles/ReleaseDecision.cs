@@ -10,7 +10,7 @@ public enum RejectionCode
     RegionExcluded, RegionNotAllowed, BetaRejected, DemoRejected, PrototypeRejected, FormatNotAllowed,
     BelowMinimumScore, UpgradesDisabled, CutoffReached, NotAnUpgrade, Blocklisted, Cooldown,
     UpdatesDisabled, DlcDisabled, InvalidCustomFormat, AmbiguousRelease, TitleMismatch, NotMonitored,
-    InsufficientSeeders, DownloadUnavailable, CategoryMismatch
+    InsufficientSeeders, DownloadUnavailable, CategoryMismatch, TooYoung, TooLarge
 }
 
 public sealed record RejectionReason(RejectionCode Code, string MessageDe, string MessageEn, string? Detail = null);
@@ -57,6 +57,8 @@ public static class RejectionReasons
             RejectionCode.InsufficientSeeders => ("Nicht genügend Seeder", "Insufficient seeders"),
             RejectionCode.DownloadUnavailable => ("Kein gültiger Download-Link", "No valid download link"),
             RejectionCode.CategoryMismatch => ("Indexer-Kategorie passt nicht zur Plattform", "Indexer category does not match the platform"),
+            RejectionCode.TooYoung => ("Release ist noch zu jung", "Release is too young"),
+            RejectionCode.TooLarge => ("Release überschreitet die maximale Größe", "Release exceeds the maximum size"),
             _ => throw new ArgumentOutOfRangeException(nameof(code))
         };
         return new RejectionReason(code, de, en, detail);

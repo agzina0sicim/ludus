@@ -1,7 +1,11 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Ludus.Api.Security;
+using Ludus.Domain.Common;
 using Ludus.Domain.Library;
 using Ludus.Infrastructure.Persistence;
 using Ludus.Infrastructure.Security;
@@ -14,6 +18,118 @@ namespace Ludus.Infrastructure.Tests;
 
 public sealed class ApiSecurityTests
 {
+    [Fact]
+    public async Task AccountSetupFormsBasicAndApiKeyAuthenticationRemainIndependent()
+    {
+        await using var fixture = new ApiFixture();
+        using var integration = await fixture.AuthorizedClientAsync();
+        using var browser = fixture.Client();
+
+        using var initialSession = await browser.GetAsync("/api/v1/auth/session");
+        Assert.Equal(HttpStatusCode.OK, initialSession.StatusCode);
+        var initialState = await initialSession.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(initialState.GetProperty("setupRequired").GetBoolean());
+        using var formsUnauthorized = await browser.GetAsync("/api/v1/games");
+        Assert.Equal(HttpStatusCode.Unauthorized, formsUnauthorized.StatusCode);
+        Assert.Null(formsUnauthorized.Headers.WwwAuthenticate.SingleOrDefault());
+
+        await CsrfAsync(browser);
+        using var setup = await browser.PostAsJsonAsync("/api/v1/auth/setup", new
+        {
+            username = "administrator",
+            password = "correct horse battery staple",
+            authenticationMethod = "Forms"
+        });
+        Assert.Equal(HttpStatusCode.NoContent, setup.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/api/v1/games")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await integration.GetAsync("/api/v1/games")).StatusCode);
+
+        using var switched = await integration.PutAsJsonAsync("/api/v1/auth/security", new
+        {
+            authenticationMethod = "Basic",
+            username = "administrator",
+            password = (string?)null,
+            trustForwardedHeaders = true,
+            forwardLimit = 1,
+            trustedProxyNetworks = new[] { "127.0.0.0/8" }
+        });
+        Assert.Equal(HttpStatusCode.NoContent, switched.StatusCode);
+
+        using var basicChallenge = await fixture.Client().GetAsync("/api/v1/games");
+        Assert.Equal(HttpStatusCode.Unauthorized, basicChallenge.StatusCode);
+        Assert.Equal("Basic", Assert.Single(basicChallenge.Headers.WwwAuthenticate).Scheme);
+
+        using var basic = fixture.Client();
+        basic.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes("administrator:correct horse battery staple")));
+        Assert.Equal(HttpStatusCode.OK, (await basic.GetAsync("/api/v1/games")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await integration.GetAsync("/api/v1/games")).StatusCode);
+    }
+
+    [Fact]
+    public async Task LegacyApiKeyInstallationRequiresOneTimeTransitionCode()
+    {
+        await using var fixture = new ApiFixture();
+        const string transitionCode = "legacy-transition-code";
+        await using (var scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var settings = await database.SecuritySettings.SingleAsync();
+            settings.AccountSetupMode = AccountSetupMode.LegacyProtected;
+            settings.SetupTokenHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(transitionCode)));
+            await database.SaveChangesAsync();
+        }
+
+        using var browser = fixture.Client();
+        await CsrfAsync(browser);
+        using var rejected = await browser.PostAsJsonAsync("/api/v1/auth/setup", new
+        {
+            username = "administrator",
+            password = "correct horse battery staple",
+            authenticationMethod = "Forms",
+            transitionCode = "wrong-code"
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
+
+        using var accepted = await browser.PostAsJsonAsync("/api/v1/auth/setup", new
+        {
+            username = "administrator",
+            password = "correct horse battery staple",
+            authenticationMethod = "Forms",
+            transitionCode
+        });
+        Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/api/v1/games")).StatusCode);
+    }
+
+    [Fact]
+    public async Task BasicAuthenticationFailuresAreRateLimitedWithoutBlockingApiKeys()
+    {
+        await using var fixture = new ApiFixture();
+        using var integration = await fixture.AuthorizedClientAsync();
+        using var configured = await integration.PutAsJsonAsync("/api/v1/auth/security", new
+        {
+            authenticationMethod = "Basic",
+            username = "administrator",
+            password = "correct horse battery staple",
+            trustForwardedHeaders = false,
+            forwardLimit = 1,
+            trustedProxyNetworks = new[] { "127.0.0.0/8" }
+        });
+        Assert.Equal(HttpStatusCode.NoContent, configured.StatusCode);
+        using var attacker = fixture.Client();
+        attacker.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes("administrator:wrong password")));
+        for (var attempt = 0; attempt < 10; attempt++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await attacker.GetAsync("/api/v1/games")).StatusCode);
+        using var limited = await attacker.GetAsync("/api/v1/games");
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.Equal("60", Assert.Single(limited.Headers.GetValues("Retry-After")));
+        Assert.Equal(HttpStatusCode.OK, (await integration.GetAsync("/api/v1/games")).StatusCode);
+    }
+
     [Fact]
     public async Task RomLinksSupportRangesAndStopWorkingAfterFileVersionChanges()
     {
@@ -44,8 +160,8 @@ public sealed class ApiSecurityTests
     {
         await using var fixture = new ApiFixture(); using var browser = fixture.Client(); await CsrfAsync(browser);
         for (var attempt = 0; attempt < 10; attempt++)
-            Assert.Equal(HttpStatusCode.Unauthorized, (await browser.PostAsJsonAsync("/api/v1/auth/login", new { apiKey = new string('0', 64) })).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await browser.PostAsJsonAsync("/api/v1/auth/login", new { apiKey = new string('0', 64) })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await browser.PostAsJsonAsync("/api/v1/auth/login", new { username = "invalid", password = "invalid password" })).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await browser.PostAsJsonAsync("/api/v1/auth/login", new { username = "invalid", password = "invalid password" })).StatusCode);
     }
 
     [Fact]
@@ -53,7 +169,7 @@ public sealed class ApiSecurityTests
     {
         await using var fixture = new ApiFixture();
         using var api = await fixture.AuthorizedClientAsync();
-        using var configured = await api.PutAsJsonAsync("/api/v1/auth/security", new { formsAuthenticationEnabled = true, username = "admin", password = "correct horse battery staple",
+        using var configured = await api.PutAsJsonAsync("/api/v1/auth/security", new { authenticationMethod = "Forms", username = "admin", password = "correct horse battery staple",
             trustForwardedHeaders = false, forwardLimit = 1, trustedProxyNetworks = new[] { "127.0.0.0/8" } });
         Assert.Equal(HttpStatusCode.NoContent, configured.StatusCode);
         using var browser = fixture.Client();

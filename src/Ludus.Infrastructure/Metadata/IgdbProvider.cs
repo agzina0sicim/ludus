@@ -14,21 +14,23 @@ namespace Ludus.Infrastructure.Metadata;
 public sealed class IgdbProvider(AppDbContext database, MetadataHttp http, ISecretProtector secrets) : IMetadataProvider
 {
     public MetadataProviderKind Kind => MetadataProviderKind.Igdb;
-    private const string Fields = "fields name,summary,first_release_date,genres.name,platforms,cover.image_id,involved_companies.developer,involved_companies.publisher,involved_companies.company.name;";
+    private const string Fields = "fields name,summary,first_release_date,genres.name,platforms,cover.image_id,game_localizations.name,game_localizations.region.identifier,involved_companies.developer,involved_companies.publisher,involved_companies.company.name;";
 
     public async Task<IReadOnlyList<MetadataGame>> SearchAsync(string query, Platform platform, CancellationToken cancellationToken)
     {
         if (platform.IgdbPlatformId is not > 0) throw new MetadataException("PlatformMappingRequired");
         var escaped = query.Replace("\\", "\\\\").Replace("\"", "\\\"");
         var data = await QueryAsync("games", $"search \"{escaped}\"; {Fields} where platforms = ({platform.IgdbPlatformId}); limit 20;", cancellationToken);
-        return MetadataHttp.Items(data).Select(Parse).ToArray();
+        var language = await PreferredLanguageAsync(cancellationToken);
+        return MetadataHttp.Items(data).Select(x => Parse(x, language)).ToArray();
     }
 
     public async Task<MetadataGame> GetAsync(string externalId, Platform platform, CancellationToken cancellationToken)
     {
         if (!long.TryParse(externalId, out var id) || id <= 0) throw new ArgumentException("Invalid metadata ID.");
         var data = await QueryAsync("games", $"{Fields} where id = {id}; limit 1;", cancellationToken);
-        var game = MetadataHttp.Items(data).Select(Parse).SingleOrDefault() ?? throw new KeyNotFoundException("Metadata game not found.");
+        var language = await PreferredLanguageAsync(cancellationToken);
+        var game = MetadataHttp.Items(data).Select(x => Parse(x, language)).SingleOrDefault() ?? throw new KeyNotFoundException("Metadata game not found.");
         if (platform.IgdbPlatformId is not { } platformId || !game.PlatformIds.Contains(platformId)) throw new MetadataException("PlatformMismatch");
         return game;
     }
@@ -80,17 +82,45 @@ public sealed class IgdbProvider(AppDbContext database, MetadataHttp http, ISecr
         throw new MetadataException("AuthenticationFailed");
     }
 
-    private static MetadataGame Parse(JsonElement game)
+    private async Task<string> PreferredLanguageAsync(CancellationToken cancellationToken) =>
+        (await database.AppSettings.AsNoTracking().SingleAsync(cancellationToken)).MetadataLanguage;
+
+    private static MetadataGame Parse(JsonElement game, string preferredLanguage)
     {
         var companies = MetadataHttp.Items(MetadataHttp.Child(game, "involved_companies")).ToArray();
         string? Company(string role) => companies.Where(x => MetadataHttp.Text(x, role).Equals("True", StringComparison.OrdinalIgnoreCase))
             .Select(x => MetadataHttp.Text(MetadataHttp.Child(x, "company"), "name")).FirstOrDefault();
         var image = MetadataHttp.Text(MetadataHttp.Child(game, "cover"), "image_id");
-        int? year = long.TryParse(MetadataHttp.Text(game, "first_release_date"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var unix)
-            && unix is >= -2208988800 and <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(unix).Year : null;
-        return new MetadataGame(MetadataProviderKind.Igdb, MetadataHttp.Text(game, "id"), MetadataHttp.Text(game, "name"), MetadataHttp.Text(game, "summary"), year,
+        DateTime? releaseDate = long.TryParse(MetadataHttp.Text(game, "first_release_date"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var unix)
+            && unix is >= -2208988800 and <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime : null;
+        var baseTitle = MetadataHttp.Text(game, "name");
+        var description = MetadataHttp.Text(game, "summary");
+        var translations = MetadataHttp.Items(MetadataHttp.Child(game, "game_localizations"))
+            .Select(x => (Language: RegionLanguage(MetadataHttp.Text(MetadataHttp.Child(x, "region"), "identifier")), Title: MetadataHttp.Text(x, "name")))
+            .Where(x => x.Language is not null && x.Title.Length > 0)
+            .GroupBy(x => x.Language!, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new MetadataTranslation(x.Key, x.First().Title, description.Length == 0 ? null : description,
+                x.Key, null)).ToList();
+        translations.Add(new MetadataTranslation("und", baseTitle, description.Length == 0 ? null : description, null, null));
+        var selected = translations.FirstOrDefault(x => x.Language.Equals(preferredLanguage, StringComparison.OrdinalIgnoreCase));
+        return new MetadataGame(MetadataProviderKind.Igdb, MetadataHttp.Text(game, "id"), selected?.Title ?? baseTitle,
+            description.Length == 0 ? null : description, releaseDate?.Year,
             Company("developer"), Company("publisher"), MetadataHttp.Items(MetadataHttp.Child(game, "genres")).Select(x => MetadataHttp.Text(x, "name")).ToArray(),
             MetadataHttp.Items(MetadataHttp.Child(game, "platforms")).Where(x => x.TryGetInt32(out _)).Select(x => x.GetInt32()).ToArray(),
-            RemoteCoverUrl: image.Length > 0 && image.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ? $"https://images.igdb.com/igdb/image/upload/t_cover_big/{image}.jpg" : null);
+            RemoteCoverUrl: image.Length > 0 && image.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ? $"https://images.igdb.com/igdb/image/upload/t_cover_big/{image}.jpg" : null,
+            ReleaseDateUtc: releaseDate, ReleaseDatePrecision: releaseDate is null ? null : ReleaseDatePrecision.Exact,
+            Translations: translations);
+    }
+
+    private static string? RegionLanguage(string identifier)
+    {
+        identifier = identifier.Replace('-', '_').ToLowerInvariant();
+        if (identifier.Contains("germany") || identifier is "de" or "german") return "de";
+        if (identifier.Contains("france") || identifier is "fr" or "french") return "fr";
+        if (identifier.Contains("spain") || identifier is "es" or "spanish") return "es";
+        if (identifier.Contains("italy") || identifier is "it" or "italian") return "it";
+        if (identifier.Contains("portugal") || identifier is "pt" or "portuguese") return "pt";
+        if (identifier.Contains("united_kingdom") || identifier.Contains("north_america") || identifier is "us" or "uk" or "en") return "en";
+        return null;
     }
 }

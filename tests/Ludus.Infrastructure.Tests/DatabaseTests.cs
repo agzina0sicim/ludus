@@ -3,6 +3,7 @@ using Ludus.Domain.Activity;
 using Ludus.Domain.Common;
 using Ludus.Domain.Integrations;
 using Ludus.Domain.Library;
+using Ludus.Domain.Profiles;
 using Ludus.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -21,7 +22,7 @@ public sealed class DatabaseTests
         await using var scope = fixture.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        Assert.Equal(2, (await database.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(3, (await database.Database.GetAppliedMigrationsAsync()).Count());
         Assert.Empty(await database.Database.GetPendingMigrationsAsync());
         Assert.False(database.Database.HasPendingModelChanges());
         Assert.Equal(22, await database.Platforms.CountAsync());
@@ -184,7 +185,7 @@ public sealed class DatabaseTests
         profile.MinimumScore = profile.UpgradeUntilScore + 1;
         await Assert.ThrowsAsync<DbUpdateException>(() => database.SaveChangesAsync());
         database.ChangeTracker.Clear();
-        (await database.SecuritySettings.SingleAsync()).FormsAuthenticationEnabled = true;
+        (await database.SecuritySettings.SingleAsync()).AccountSetupMode = AccountSetupMode.Complete;
         await Assert.ThrowsAsync<DbUpdateException>(() => database.SaveChangesAsync());
     }
 
@@ -243,6 +244,84 @@ public sealed class DatabaseTests
         await fixture.InitializeAsync();
         await using var newScope = fixture.CreateScope();
         Assert.Equal(22, await newScope.ServiceProvider.GetRequiredService<AppDbContext>().Platforms.CountAsync());
+    }
+
+    [Fact]
+    public async Task LegacyGlobalProfilesAreClonedPerUsedPlatformWithoutLosingScores()
+    {
+        await using var fixture = new TestDatabase();
+        await using var scope = fixture.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var migrator = database.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261122094634_DownloadAutomation");
+        var now = DateTime.UtcNow.ToString("O");
+        var version = Guid.NewGuid();
+        await database.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO "Platforms" ("Id", "Name", "Slug", "AccentColor", "Monitored", "SupportsFolderGames", "ExtractArchives",
+                "PrimaryMetadataProvider", "MetadataFallbackEnabled", "IgdbPlatformId", "ScreenScraperSystemId", "AllowedExtensions",
+                "TorznabCategories", "CreatedAtUtc", "UpdatedAtUtc", "Version") VALUES
+                (1, 'SNES', 'snes', '#111111', 1, 0, 1, 'Igdb', 1, NULL, NULL, '[".sfc"]', '[1000]', {{now}}, {{now}}, {{version}}),
+                (2, 'Mega Drive', 'mega-drive', '#222222', 1, 0, 1, 'Igdb', 1, NULL, NULL, '[".md"]', '[1000]', {{now}}, {{now}}, {{version}});
+            INSERT INTO "RootFolders" ("Id", "Name", "Path", "LastScanAtUtc", "CreatedAtUtc", "UpdatedAtUtc", "Version")
+                VALUES (1, 'ROMs', 'C:\\roms', NULL, {{now}}, {{now}}, {{version}});
+            INSERT INTO "QualityProfiles" ("Id", "Name", "MinimumScore", "AllowUpgrades", "UpgradeUntilScore", "AllowedRegions",
+                "ExcludedRegions", "RejectBeta", "RejectDemo", "RejectPrototype", "AllowUpdates", "AllowDlc", "CreatedAtUtc", "UpdatedAtUtc", "Version") VALUES
+                (10, 'Deutsch', 0, 1, 100, '[]', '[]', 1, 1, 1, 1, 1, {{now}}, {{now}}, {{version}}),
+                (11, 'Unbenutzt', 0, 1, 100, '[]', '[]', 1, 1, 1, 1, 1, {{now}}, {{now}}, {{version}});
+            INSERT INTO "CustomFormats" ("Id", "Name", "MatchMode", "CreatedAtUtc", "UpdatedAtUtc", "Version")
+                VALUES (20, 'Deutsch', 'Any', {{now}}, {{now}}, {{version}});
+            INSERT INTO "QualityProfileFormats" ("QualityProfileId", "CustomFormatId", "Score") VALUES (10, 20, 100);
+            INSERT INTO "Games" ("Id", "Title", "SortTitle", "Description", "ReleaseYear", "Developer", "Publisher", "Genres", "Serials",
+                "BaseTitleId", "CoverRelativePath", "Monitored", "Status", "PlatformId", "RootFolderId", "QualityProfileId",
+                "MetadataUpdatedAtUtc", "CreatedAtUtc", "UpdatedAtUtc", "Version") VALUES
+                (100, 'SNES Game', 'SNES Game', NULL, 1994, NULL, NULL, '[]', '[]', NULL, NULL, 1, 'Missing', 1, 1, 10, NULL, {{now}}, {{now}}, {{version}}),
+                (101, 'Mega Drive Game', 'Mega Drive Game', NULL, 1993, NULL, NULL, '[]', '[]', NULL, NULL, 1, 'Missing', 2, 1, 10, NULL, {{now}}, {{now}}, {{version}});
+            """);
+
+        await migrator.MigrateAsync();
+        database.ChangeTracker.Clear();
+        var migrated = await database.QualityProfiles.Include(x => x.Formats).OrderBy(x => x.Id).ToListAsync();
+        var used = migrated.Where(x => x.Name == "Deutsch").OrderBy(x => x.PlatformId).ToArray();
+        Assert.Equal(2, used.Length);
+        Assert.Equal([1L, 2L], used.Select(x => x.PlatformId));
+        Assert.All(used, profile => Assert.Equal(100, Assert.Single(profile.Formats).Score));
+        Assert.Equal(1, migrated.Single(x => x.Name == "Unbenutzt").PlatformId);
+        Assert.Equal(1, (await database.Games.SingleAsync(x => x.Id == 100)).QualityProfile.PlatformId);
+        Assert.Equal(2, (await database.Games.SingleAsync(x => x.Id == 101)).QualityProfile.PlatformId);
+        Assert.Empty(await database.Database.GetPendingMigrationsAsync());
+    }
+
+    [Fact]
+    public async Task SharedCustomFormatScoresRemainIndependentPerPlatformProfile()
+    {
+        await using var fixture = new TestDatabase();
+        await fixture.InitializeAsync();
+        await using var scope = fixture.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var format = await database.CustomFormats.SingleAsync(x => x.Name == "Europe");
+        var platforms = await database.Platforms.Where(x => x.Slug == "nes" || x.Slug == "mega-drive").OrderBy(x => x.Slug).ToArrayAsync();
+        Assert.Equal(2, platforms.Length);
+        var megaDrive = new QualityProfile
+        {
+            Name = "Deutsch", PlatformId = platforms[0].Id, UpgradeUntilScore = 100,
+            Formats = [new QualityProfileFormat { CustomFormatId = format.Id, Score = 20 }]
+        };
+        var snes = new QualityProfile
+        {
+            Name = "Deutsch", PlatformId = platforms[1].Id, UpgradeUntilScore = 100,
+            Formats = [new QualityProfileFormat { CustomFormatId = format.Id, Score = 100 }]
+        };
+        database.QualityProfiles.AddRange(megaDrive, snes);
+        await database.SaveChangesAsync();
+        snes.Formats.Single().Score = 125;
+        await database.SaveChangesAsync();
+        database.ChangeTracker.Clear();
+
+        var profiles = await database.QualityProfiles.Where(x => x.Name == "Deutsch").Include(x => x.Formats).ToDictionaryAsync(x => x.PlatformId);
+        Assert.Equal(20, profiles[megaDrive.PlatformId].Formats.Single().Score);
+        Assert.Equal(125, profiles[snes.PlatformId].Formats.Single().Score);
+        Assert.Equal(format.Id, profiles[megaDrive.PlatformId].Formats.Single().CustomFormatId);
+        Assert.Equal(format.Id, profiles[snes.PlatformId].Formats.Single().CustomFormatId);
     }
 
     private static async Task<Game> AddGameAsync(AppDbContext database)

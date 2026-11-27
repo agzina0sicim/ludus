@@ -10,13 +10,20 @@ using Microsoft.EntityFrameworkCore;
 namespace Ludus.Api.Features;
 
 [ApiController, Route("api/v1/activity")]
-public sealed class ActivityController(AppDbContext database, IEnumerable<IDownloadClientAdapter> clients, DownloadGate gate) : ControllerBase
+public sealed class ActivityController(AppDbContext database, IEnumerable<IDownloadClientAdapter> clients, DownloadGate gate,
+    DownloadCoordinator coordinator) : ControllerBase
 {
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken cancellationToken) => Ok(await database.Downloads.AsNoTracking()
         .Where(x => x.Status != DownloadStatus.Imported && x.Status != DownloadStatus.Failed || x.CleanupPending || x.ReplacementSearchPending)
         .OrderBy(x => x.Id).Select(x => new { x.Id, x.GameId, x.DownloadClientId, x.DownloadId, x.ReleaseTitle, x.Status, x.Score, x.Size,
-            x.DownloadedBytes, x.SpeedBytesPerSecond, x.EtaSeconds, x.FailureCode, x.ImportAttempts, x.CleanupPending, x.ReplacementSearchPending }).ToArrayAsync(cancellationToken));
+            x.DownloadedBytes, x.SpeedBytesPerSecond, x.EtaSeconds, x.FailureCode, x.ImportAttempts, x.CleanupPending, x.ReplacementSearchPending, x.Origin }).ToArrayAsync(cancellationToken));
+    [HttpPost("queue/{id:long}/import")]
+    public async Task<IActionResult> Import(long id, CancellationToken cancellationToken)
+    {
+        await coordinator.ImportCompletedAsync(id, cancellationToken);
+        return Accepted();
+    }
     [HttpGet("history")]
     public async Task<IActionResult> History([FromQuery] long? gameId, [FromQuery, Range(1, int.MaxValue)] int page = 1,
         [FromQuery, Range(1, 200)] int pageSize = 50, CancellationToken cancellationToken = default)

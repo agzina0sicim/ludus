@@ -9,34 +9,33 @@ vorhanden; sie ist noch keine Verwaltungsoberfläche.
 
 Ohne Anmeldung liefert ausschließlich der Status-Endpunkt Systeminformationen
 in der minimalen Form `{"status":"ok"}`. Die weiteren anonymen Routen sind
-`auth/csrf`, `auth/session`, `auth/login` und der durch ein eigenes zeitbegrenztes
+`auth/csrf`, `auth/session`, `auth/login`, `auth/setup` und der durch ein eigenes zeitbegrenztes
 Token geschützte Medienabruf. Unbekannte API-Routen fallen nicht auf die SPA zurück.
 
-Der generierte API-Key wird weiterhin verschlüsselt in SQLite gespeichert. Solange
-Forms-Authentifizierung deaktiviert ist, schreibt der Start zusätzlich
-`/config/bootstrap-api-key` für die Ersteinrichtung. Unter Linux erhält diese Datei
-Modus `0600`; unter Windows gelten die geerbten ACLs des Config-Verzeichnisses.
-Die Datei wird beim Aktivieren von Forms-Authentifizierung entfernt. Sie gehört
-weder zum Backup noch zur Diagnostik und wird nicht geloggt.
+Eine neue Instanz beginnt im Setup-Modus. `POST auth/setup` legt genau einmal
+Benutzername, ASP.NET-Identity-Passworthash und die Methode `Forms` oder `Basic`
+fest. `Forms` ist der Standard und verwendet das HttpOnly-Session-Cookie; `Basic`
+antwortet bei fehlenden Zugangsdaten mit `WWW-Authenticate: Basic` und verwendet
+dieselben Zugangsdaten. Im Forms-Modus wird diese Challenge bewusst nicht gesendet.
 
-Beispiel für die lokale Windows-Konfiguration:
-
-```powershell
-$ludusBaseUrl = 'http://127.0.0.1:8080'
-$ludusApiKey = (Get-Content -LiteralPath '.local/config/bootstrap-api-key' -Raw).Trim()
-$ludusHeaders = @{ 'X-Api-Key' = $ludusApiKey }
-Invoke-RestMethod "$ludusBaseUrl/api/v1/platforms" -Headers $ludusHeaders
-```
-
-Externe Dashboards verwenden `X-Api-Key`. Ein ausdrücklich übermittelter ungültiger
+Der separat generierte API-Key wird verschlüsselt in SQLite gespeichert. Externe
+Dashboards und Integrationen verwenden `X-Api-Key`. Ein ausdrücklich übermittelter ungültiger
 Key kann nicht durch ein zusätzliches gültiges Cookie ersetzt werden. API-Keys
-werden nicht aus Query-Strings gelesen.
+werden nicht aus Query-Strings gelesen und sind keine Browser-Anmeldemethode.
+
+Eine migrierte Instanz ohne Benutzerkonto beginnt in `LegacyProtected`. Beim Start
+wird lokal `/config/account-setup-token` mit Modus `0600` unter Unix erzeugt; das
+Setup akzeptiert nur dessen SHA256-verifizierten Einmalcode. Vorhandene Benutzernamen
+und Hashes wechseln direkt nach `Complete`. Für eine lokale Wiederherstellung wird
+bei gestopptem oder laufendem Dienst der Marker `/config/reset-account` angelegt und
+Ludus neu gestartet; der Marker wird verbraucht und ein neuer Einmalcode erzeugt.
 
 Der Browser-Anmeldeablauf lautet:
 
 1. `GET /api/v1/auth/csrf` abrufen; Cookie behalten und den zurückgegebenen `token`
    als Header `X-CSRF-Token` senden.
-2. `POST /api/v1/auth/login` mit `username`/`password` oder mit `apiKey` als JSON.
+2. Im Forms-Modus `POST /api/v1/auth/login` mit `username`/`password` senden. Im
+   Basic-Modus übernimmt der Browser die `Authorization: Basic`-Aushandlung.
 3. Nach erfolgreicher Anmeldung den CSRF-Token erneut abrufen, da er jetzt an den
    authentifizierten Benutzer gebunden ist.
 4. Bei schreibenden Cookie-Anfragen einschließlich Logout und SignalR-Negotiation
@@ -48,7 +47,7 @@ und Client-IP begrenzt. Forms-Passwörter werden mit ASP.NET Identity gehasht;
 neue Passwörter müssen mindestens zwölf Zeichen enthalten. Der Login-Bildschirm
 wird mit dem Frontend in Schritt 5 umgesetzt.
 
-`PUT auth/security` konfiguriert Forms-Zugang und Reverse Proxies. Sicherheitsänderungen
+`PUT auth/security` konfiguriert Forms-/Basic-Zugang und Reverse Proxies. Sicherheitsänderungen
 und `POST auth/api-key/reset` ändern die Session-Version und widerrufen bestehende
 Cookies und Medienlinks. SignalR sendet anschließend nur noch an die aktuelle
 Session-Gruppe. Der neue Key wird beim Reset einmal in der authentifizierten
@@ -88,8 +87,8 @@ interne Zustände werden nicht aus Request-Objekten übernommen.
 
 | Bereich | Routen relativ zu `/api/v1` |
 |---|---|
-| Authentifizierung | `GET auth/csrf`, `GET auth/session`, `POST auth/login`, `POST auth/logout`, `GET/PUT auth/security`, `GET auth/api-key`, `POST auth/api-key/reset` |
-| Bibliothek | `GET/POST games`, `GET/PUT/DELETE games/{id}`, `PUT games/{id}/metadata`, `POST games/{id}/refresh-metadata` |
+| Authentifizierung | `GET auth/csrf`, `GET auth/session`, `POST auth/setup`, `POST auth/login`, `POST auth/logout`, `GET/PUT auth/security`, `GET auth/api-key`, `POST auth/api-key/reset` |
+| Bibliothek | `GET/POST games`, `GET/PUT/DELETE games/{id}`, `GET games/calendar`, `PUT games/{id}/metadata`, `POST games/{id}/refresh-metadata` |
 | Suche/Grab | `GET games/{id}/search`, `POST games/{id}/grab` |
 | Root Folders | `GET/POST root-folders`, `GET/PUT/DELETE root-folders/{id}` |
 | Plattformen | `GET/POST platforms`, `GET/PUT/DELETE platforms/{id}`, `PUT platforms/{id}/monitoring` |
@@ -102,7 +101,7 @@ interne Zustände werden nicht aus Request-Objekten übernommen.
 | Metadaten | `GET metadata/search`, `GET metadata/{provider}/systems`, `POST metadata/{provider}/test`, `GET metadata/providers`, `PUT metadata/providers/{provider}` |
 | Connect | `GET/POST webhooks`, `GET/PUT/DELETE webhooks/{id}`, `POST webhooks/{id}/test` |
 | Einstellungen | `GET/PUT settings` |
-| Aktivität | `GET activity/queue`, `GET activity/history`, `GET activity/blocklist`, `DELETE activity/blocklist/{id}`, `DELETE activity/queue/{id}` |
+| Aktivität | `GET activity/queue`, `POST activity/queue/{id}/import`, `GET activity/history`, `GET activity/blocklist`, `DELETE activity/blocklist/{id}`, `DELETE activity/queue/{id}` |
 | Medien | `POST media/links`, `GET media/content?token=...` |
 | System | `GET system/status`, `GET system/info`, `GET system/health`, `POST system/health/check` |
 | Aufgaben | `GET system/tasks`, `PUT system/tasks/{kind}`, `POST system/tasks/{kind}/run`, `POST system/library/scan` |
@@ -130,8 +129,10 @@ Weitere Details:
 - DAT-Uploads sind Multipart-Anfragen mit `platformId` und `file`; die Grenze
   beträgt 256 MiB. Die vorhandene sichere XML-Pipeline wird wiederverwendet.
 - `PUT platforms/{id}/monitoring` setzt Plattform und alle zugehörigen Spiele.
-- Profilantworten enthalten `profile` und `formats`; Formatantworten enthalten
-  ihre Regeln. Ungültige reguläre Ausdrücke werden bereits beim Speichern abgewiesen.
+- Profilantworten enthalten `profile` und `formats`; jedes Profil besitzt genau eine
+  Plattform. Spiele akzeptieren nur Profile derselben Plattform. Formatantworten
+  enthalten ihre wiederverwendbaren Regeln; Scores bleiben profilspezifisch.
+  Ungültige reguläre Ausdrücke werden bereits beim Speichern abgewiesen.
 - Root-Verzeichnisse müssen vorhanden sein. Ein Root-Wechsel bei registrierten
   Dateien wird nicht als implizite Dateiverschiebung ausgeführt. Ein Scan kann
   tatsächlich verschobene Dateien wieder zuordnen.
@@ -160,9 +161,17 @@ serialisiert und mit mindestens 260 ms Abstand ausgeführt. Grundlage sind die
 ScreenScraper v2 verwendet Entwickler-ID/-Passwort sowie optional Benutzername und
 Passwort. `jeuRecherche.php`, `jeuInfos.php`, `systemesListe.php` und
 `ssuserInfos.php` liefern Suche, Details, Systemzuordnung und Credential-Test.
-Beschreibungen bevorzugen Deutsch, danach Englisch und Französisch; Titel und
-Release-Datum bevorzugen europäische Angaben. Siehe die
+Titel werden nach Region, Beschreibungen und Genres nach Sprache gelesen. Siehe die
 [offizielle ScreenScraper-API](https://www.screenscraper.fr/webapi2.php).
+
+Die bevorzugte Metadatensprache ist unabhängig von der UI-Sprache. IGDB-
+`game_localizations` liefern regionsbezogene lokalisierte Namen, aber keine
+entsprechend lokalisierten Beschreibungen; ScreenScraper liefert regiongebundene
+Namen und sprachgebundene `synopsis_*`-/Genre-Felder. Titel und Beschreibung tragen
+deshalb getrennte Sprachkennzeichen. Verfügbare Fassungen werden je Spiel gespeichert,
+der Cache-Schlüssel enthält die gewünschte Sprache, und ein Refresh ersetzt nur die
+Fassungen des aktualisierten Providers. Feldweiser Fallback erhält die tatsächlich
+angezeigte Sprache.
 
 Plattform-IDs werden über die jeweilige Systemliste explizit zugeordnet. Es werden
 keine geratenen IDs eingetragen. Ohne gewählten Provider verwendet die Suche die

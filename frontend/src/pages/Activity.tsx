@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
-import { RefreshCw, Trash2 } from 'lucide-react';
+import { Download, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import { useResource } from '../hooks';
 import { bytes, date, useLocale } from '../i18n';
@@ -101,6 +101,19 @@ function Queue() {
                                             : `${Math.floor(item.etaSeconds / 3600)}h ${Math.floor((item.etaSeconds % 3600) / 60)}m`}
                                     </td>
                                     <td>
+                                        {item.status === 'Completed' && (
+                                            <Button
+                                                aria-label={t('Manuell importieren', 'Import manually')}
+                                                onClick={() =>
+                                                    api(`activity/queue/${item.id}/import`, {
+                                                        method: 'POST',
+                                                    })
+                                                }
+                                            >
+                                                <Download size={18} />
+                                                {t('Importieren', 'Import')}
+                                            </Button>
+                                        )}
                                         <Button
                                             className="icon-button"
                                             aria-label={t('Download entfernen', 'Remove download')}

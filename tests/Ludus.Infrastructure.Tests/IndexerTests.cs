@@ -17,6 +17,26 @@ namespace Ludus.Infrastructure.Tests;
 
 public sealed class IndexerTests
 {
+    [Fact]
+    public void ReleasePolicyAppliesAgeOnlyToDatedUsenetAndMaximumSizeToEveryProtocol()
+    {
+        var now = new DateTime(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+        var settings = new Ludus.Domain.Configuration.AppSettings
+        {
+            RecyclingBinPath = "recycling",
+            MinimumAgeMinutes = 60,
+            MaximumIndexerSizeBytes = 1_000
+        };
+        IndexerRelease Release(DownloadProtocol protocol, long size, DateTime? published) =>
+            new(1, "id", "fingerprint", "Example", size, protocol, 1, 1, published, [1000], null, []);
+
+        var rejected = ReleasePolicy.Rejections(Release(DownloadProtocol.Usenet, 1_001, now.AddMinutes(-30)), settings, now);
+        Assert.Contains(rejected, x => x.Code == RejectionCode.TooYoung);
+        Assert.Contains(rejected, x => x.Code == RejectionCode.TooLarge);
+        Assert.Empty(ReleasePolicy.Rejections(Release(DownloadProtocol.Usenet, 1_000, null), settings, now));
+        Assert.Empty(ReleasePolicy.Rejections(Release(DownloadProtocol.Torrent, 1_000, now), settings, now));
+    }
+
     private const string Caps = """
         <caps><limits max="2" default="1"/><searching><search available="yes" supportedParams="q"/></searching>
         <categories><category id="1000" name="Console"><subcat id="1010" name="NDS"/></category></categories></caps>

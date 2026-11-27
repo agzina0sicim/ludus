@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Ludus.Api.Features;
 
 public sealed record ProfileFormatRequest([Range(1, long.MaxValue)] long CustomFormatId, int Score);
-public sealed record ProfileRequest([Required, MaxLength(128)] string Name, int MinimumScore, bool AllowUpgrades, int UpgradeUntilScore,
+public sealed record ProfileRequest([Required, MaxLength(128)] string Name, [Range(1, long.MaxValue)] long PlatformId,
+    int MinimumScore, bool AllowUpgrades, int UpgradeUntilScore,
     [Required, MaxLength(64)] List<string> AllowedRegions, [Required, MaxLength(64)] List<string> ExcludedRegions,
     bool RejectBeta, bool RejectDemo, bool RejectPrototype, bool AllowUpdates, bool AllowDlc, [Required, MaxLength(1000)] List<ProfileFormatRequest> Formats);
 public sealed record FormatRuleRequest(FormatField Field, FormatOperator Operator, [Required, MaxLength(2000)] string Value, bool Negate, bool Required);
@@ -19,14 +20,15 @@ public sealed record FormatRequest([Required, MaxLength(128)] string Name, Forma
 public sealed class ProfilesController(AppDbContext database) : ControllerBase
 {
     [HttpGet("profiles")]
-    public async Task<IActionResult> Profiles(CancellationToken cancellationToken)
+    public async Task<IActionResult> Profiles([FromQuery] long? platformId, CancellationToken cancellationToken)
     {
-        var profiles = await database.QualityProfiles.AsNoTracking().Include(x => x.Formats).ToArrayAsync(cancellationToken);
+        var profiles = await database.QualityProfiles.AsNoTracking().Where(x => platformId == null || x.PlatformId == platformId).Include(x => x.Formats).ToArrayAsync(cancellationToken);
         return Ok(profiles.Select(x => new { profile = ConfigurationSupport.View(x), formats = x.Formats.Select(f => new { f.CustomFormatId, f.Score }) }));
     }
     [HttpPost("profiles")]
     public async Task<IActionResult> AddProfile(ProfileRequest request, CancellationToken cancellationToken)
     {
+        if (!await database.Platforms.AnyAsync(x => x.Id == request.PlatformId, cancellationToken)) return BadRequest(new { code = "InvalidPlatform" });
         var profile = new QualityProfile { Name = request.Name }; Apply(request, profile); database.QualityProfiles.Add(profile);
         await database.SaveChangesAsync(cancellationToken); return Created($"/api/v1/profiles/{profile.Id}", new { profile.Id });
     }
@@ -34,6 +36,9 @@ public sealed class ProfilesController(AppDbContext database) : ControllerBase
     public async Task<IActionResult> UpdateProfile(long id, ProfileRequest request, CancellationToken cancellationToken)
     {
         var profile = await database.QualityProfiles.Include(x => x.Formats).SingleOrDefaultAsync(x => x.Id == id, cancellationToken) ?? throw new KeyNotFoundException();
+        if (!await database.Platforms.AnyAsync(x => x.Id == request.PlatformId, cancellationToken)) return BadRequest(new { code = "InvalidPlatform" });
+        if (profile.PlatformId != request.PlatformId && await database.Games.AnyAsync(x => x.QualityProfileId == id, cancellationToken))
+            return Conflict(new { code = "ProfileAssignedToGames" });
         Apply(request, profile); await database.SaveChangesAsync(cancellationToken); return NoContent();
     }
     [HttpDelete("profiles/{id:long}")]

@@ -12,7 +12,7 @@ public sealed class ArchiveExtractor(IFileHasher hasher)
     {
         SafePaths.RejectLinks(archivePath);
         SafePaths.RejectLinks(destination);
-        Directory.CreateDirectory(destination);
+        MediaPermissions.CreateDirectory(destination, settings);
         try
         {
             using var archive = ArchiveFactory.OpenArchive(archivePath);
@@ -28,9 +28,10 @@ public sealed class ArchiveExtractor(IFileHasher hasher)
                 if (entry.IsEncrypted || entry.LinkTarget is not null) throw new ImportException("EncryptedOrLinkedArchive", true);
                 var key = entry.Key?.TrimEnd('/', '\\') ?? "";
                 var target = SafePaths.Within(destination, key);
-                if (entry.IsDirectory) { Directory.CreateDirectory(target); continue; }
+                if (entry.IsDirectory) { MediaPermissions.CreateDirectory(target, settings); continue; }
                 if (entry.Size < 0 || entry.Size > settings.MaximumExtractedBytes - total) throw new ImportException("ArchiveSizeLimit", true);
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                FreeSpace.EnsureAvailable(target, entry.Size, settings.MinimumFreeSpaceBytes, settings.SkipFreeSpaceCheck);
+                MediaPermissions.CreateDirectory(Path.GetDirectoryName(target)!, settings);
                 using var input = entry.OpenEntryStream();
                 await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, FileOptions.Asynchronous);
                 long written = 0;

@@ -173,6 +173,9 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<string>("FailureCode")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("FailureHandledAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("GameId")
                         .HasColumnType("INTEGER");
 
@@ -184,6 +187,11 @@ namespace Ludus.Infrastructure.Persistence.Migrations
 
                     b.Property<long?>("IndexerId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Protocol")
                         .IsRequired()
@@ -249,9 +257,13 @@ namespace Ludus.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("GameId", "ReleaseFingerprint");
 
+                    b.HasIndex("Status", "FailureHandledAtUtc");
+
                     b.ToTable("Downloads", t =>
                         {
                             t.HasCheckConstraint("CK_Downloads_ContentKind", "\"ContentKind\" IN ('Base', 'Update', 'Dlc')");
+
+                            t.HasCheckConstraint("CK_Downloads_Origin", "\"Origin\" IN ('Automatic', 'Interactive')");
 
                             t.HasCheckConstraint("CK_Downloads_Protocol", "\"Protocol\" IN ('Torrent', 'Usenet')");
 
@@ -312,7 +324,7 @@ namespace Ludus.Infrastructure.Persistence.Migrations
 
                     b.ToTable("WebhookDeliveries", t =>
                         {
-                            t.HasCheckConstraint("CK_WebhookDeliveries_Event", "\"Event\" IN ('Grabbed', 'Imported', 'Upgraded', 'DownloadFailed')");
+                            t.HasCheckConstraint("CK_WebhookDeliveries_Event", "\"Event\" IN ('Grabbed', 'Imported', 'ImportFailed', 'Upgraded', 'DownloadFailed')");
 
                             t.HasCheckConstraint("CK_WebhookDelivery_Attempts", "\"Attempts\" >= 0");
                         });
@@ -329,10 +341,35 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<int>("BackupRetentionCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CalendarHeaderFormat")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CreateEmptyFolders")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("DeleteEmptyFolders")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DirectoryPermissions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("DownloadRefreshIntervalSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("EnableCompletedDownloadHandling")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FilePermissions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FirstDayOfWeek")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("HealthCheckIntervalMinutes")
@@ -349,13 +386,33 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<int>("LibraryScanIntervalHours")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("LongDateFormat")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("MaximumArchiveEntries")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("MaximumExtractedBytes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("MaximumIndexerSizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MediaGroup")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("MediaLinkLifetimeSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MetadataLanguage")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MinimumAgeMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MinimumFreeSpaceBytes")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("NamingSchema")
@@ -372,14 +429,35 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<int>("RecyclingRetentionDays")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("RedownloadFailed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("RedownloadFailedFromInteractiveSearch")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("RenameFiles")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("RssIntervalMinutes")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ShortDateFormat")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SkipFreeSpaceCheck")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Use12HourTime")
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("UseCanonicalDatNames")
                         .HasColumnType("INTEGER");
@@ -394,15 +472,25 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_AppSettings_ArchiveLimits", "\"MaximumArchiveEntries\" > 0 AND \"MaximumExtractedBytes\" > 0");
 
-                            t.HasCheckConstraint("CK_AppSettings_Intervals", "\"RssIntervalMinutes\" >= 1 AND \"DownloadRefreshIntervalSeconds\" >= 5 AND \"LibraryScanIntervalHours\" >= 1 AND \"HealthCheckIntervalMinutes\" >= 1 AND \"BackupIntervalHours\" >= 1");
+                            t.HasCheckConstraint("CK_AppSettings_Calendar", "\"FirstDayOfWeek\" BETWEEN 0 AND 6");
 
-                            t.HasCheckConstraint("CK_AppSettings_Language", "\"Language\" IN ('de', 'en')");
+                            t.HasCheckConstraint("CK_AppSettings_CalendarHeaderFormat", "\"CalendarHeaderFormat\" IN ('ShortWeekday', 'ShortWeekdayDate', 'LongWeekday')");
+
+                            t.HasCheckConstraint("CK_AppSettings_Intervals", "\"RssIntervalMinutes\" >= 1 AND \"MinimumAgeMinutes\" >= 0 AND \"DownloadRefreshIntervalSeconds\" >= 5 AND \"LibraryScanIntervalHours\" >= 1 AND \"HealthCheckIntervalMinutes\" >= 1 AND \"BackupIntervalHours\" >= 1");
+
+                            t.HasCheckConstraint("CK_AppSettings_Language", "\"Language\" IN ('de', 'en') AND length(trim(\"MetadataLanguage\")) BETWEEN 2 AND 16");
 
                             t.HasCheckConstraint("CK_AppSettings_MediaLifetime", "\"MediaLinkLifetimeSeconds\" BETWEEN 30 AND 3600");
+
+                            t.HasCheckConstraint("CK_AppSettings_Permissions", "\"FilePermissions\" GLOB '0[0-7][0-7][0-7]' AND \"DirectoryPermissions\" GLOB '0[0-7][0-7][0-7]'");
 
                             t.HasCheckConstraint("CK_AppSettings_Retention", "\"BackupRetentionCount\" >= 1 AND \"RecyclingRetentionDays\" >= 1");
 
                             t.HasCheckConstraint("CK_AppSettings_Singleton", "\"Id\" = 1");
+
+                            t.HasCheckConstraint("CK_AppSettings_Storage", "\"MinimumFreeSpaceBytes\" >= 0 AND \"MaximumIndexerSizeBytes\" >= 0");
+
+                            t.HasCheckConstraint("CK_AppSettings_Theme", "\"Theme\" IN ('Light', 'Dark', 'Auto')");
                         });
                 });
 
@@ -411,15 +499,22 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Property<long>("Id")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("AccountSetupMode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ApiKey")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("CreatedAtUtc")
+                    b.Property<string>("AuthenticationMethod")
+                        .IsRequired()
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("FormsAuthenticationEnabled")
-                        .HasColumnType("INTEGER");
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("ForwardLimit")
                         .HasColumnType("INTEGER");
@@ -428,6 +523,9 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("SessionVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SetupTokenHash")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("TrustForwardedHeaders")
@@ -451,7 +549,11 @@ namespace Ludus.Infrastructure.Persistence.Migrations
 
                     b.ToTable("SecuritySettings", t =>
                         {
-                            t.HasCheckConstraint("CK_SecuritySettings_FormsCredentials", "\"FormsAuthenticationEnabled\" = 0 OR (\"Username\" IS NOT NULL AND length(trim(\"Username\")) > 0 AND \"PasswordHash\" IS NOT NULL AND length(\"PasswordHash\") > 0)");
+                            t.HasCheckConstraint("CK_SecuritySettings_AccountCredentials", "\"AccountSetupMode\" <> 'Complete' OR (\"Username\" IS NOT NULL AND length(trim(\"Username\")) > 0 AND \"PasswordHash\" IS NOT NULL AND length(\"PasswordHash\") > 0)");
+
+                            t.HasCheckConstraint("CK_SecuritySettings_AccountSetupMode", "\"AccountSetupMode\" IN ('NewInstance', 'LegacyProtected', 'Complete')");
+
+                            t.HasCheckConstraint("CK_SecuritySettings_AuthenticationMethod", "\"AuthenticationMethod\" IN ('Forms', 'Basic')");
 
                             t.HasCheckConstraint("CK_SecuritySettings_ForwardLimit", "\"ForwardLimit\" BETWEEN 1 AND 10");
 
@@ -788,8 +890,20 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Target")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Token")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAtUtc")
@@ -811,6 +925,8 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.ToTable("Webhooks", t =>
                         {
                             t.HasCheckConstraint("CK_Webhook_Events_Json", "json_valid(\"Events\") AND json_type(\"Events\") = 'array'");
+
+                            t.HasCheckConstraint("CK_Webhooks_Kind", "\"Kind\" IN ('Discord', 'Gotify', 'Telegram', 'Generic')");
                         });
                 });
 
@@ -840,6 +956,10 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ManagedFolderRelativePath")
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("MetadataUpdatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -854,6 +974,13 @@ namespace Ludus.Infrastructure.Persistence.Migrations
 
                     b.Property<long>("QualityProfileId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ReleaseDatePrecision")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReleaseDateUtc")
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("ReleaseYear")
                         .HasColumnType("INTEGER");
@@ -912,6 +1039,8 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Game_Title", "length(trim(\"Title\")) > 0");
 
                             t.HasCheckConstraint("CK_Game_Year", "\"ReleaseYear\" IS NULL OR \"ReleaseYear\" BETWEEN 1900 AND 9999");
+
+                            t.HasCheckConstraint("CK_Games_ReleaseDatePrecision", "\"ReleaseDatePrecision\" IN ('Exact', 'Month', 'Year')");
 
                             t.HasCheckConstraint("CK_Games_Status", "\"Status\" IN ('Missing', 'Downloading', 'Available')");
                         });
@@ -1100,6 +1229,60 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.ToTable("GameMetadataReferences", t =>
                         {
                             t.HasCheckConstraint("CK_GameMetadataReferences_Provider", "\"Provider\" IN ('Igdb', 'ScreenScraper')");
+                        });
+                });
+
+            modelBuilder.Entity("Ludus.Domain.Library.GameMetadataTranslation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DescriptionLanguage")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GameId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TitleLanguage")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId", "Provider", "Language")
+                        .IsUnique();
+
+                    b.ToTable("GameMetadataTranslations", t =>
+                        {
+                            t.HasCheckConstraint("CK_GameMetadataTranslations_Provider", "\"Provider\" IN ('Igdb', 'ScreenScraper')");
                         });
                 });
 
@@ -1526,6 +1709,9 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("PlatformId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("RejectBeta")
                         .HasColumnType("INTEGER");
 
@@ -1547,7 +1733,7 @@ namespace Ludus.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("PlatformId", "Name")
                         .IsUnique();
 
                     b.ToTable("QualityProfiles", t =>
@@ -1874,6 +2060,17 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Navigation("Game");
                 });
 
+            modelBuilder.Entity("Ludus.Domain.Library.GameMetadataTranslation", b =>
+                {
+                    b.HasOne("Ludus.Domain.Library.Game", "Game")
+                        .WithMany("MetadataTranslations")
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+                });
+
             modelBuilder.Entity("Ludus.Domain.Operations.TaskRun", b =>
                 {
                     b.HasOne("Ludus.Domain.Operations.ScheduledTask", "ScheduledTask")
@@ -1894,6 +2091,17 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("CustomFormat");
+                });
+
+            modelBuilder.Entity("Ludus.Domain.Profiles.QualityProfile", b =>
+                {
+                    b.HasOne("Ludus.Domain.Library.Platform", "Platform")
+                        .WithMany()
+                        .HasForeignKey("PlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Platform");
                 });
 
             modelBuilder.Entity("Ludus.Domain.Profiles.QualityProfileFormat", b =>
@@ -1953,6 +2161,8 @@ namespace Ludus.Infrastructure.Persistence.Migrations
                     b.Navigation("Files");
 
                     b.Navigation("MetadataReferences");
+
+                    b.Navigation("MetadataTranslations");
                 });
 
             modelBuilder.Entity("Ludus.Domain.Profiles.CustomFormat", b =>
