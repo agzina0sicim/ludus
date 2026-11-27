@@ -43,7 +43,9 @@ export default function AddGamePage() {
             <h1 className="sr-only">{t('Spiel hinzufügen', 'Add game')}</h1>
             <div className="add-search">
                 <div className="field">
-                    <label htmlFor="game-title-search">{t('Spieltitel suchen', 'Search game titles')}</label>
+                    <label className="sr-only" htmlFor="game-title-search">
+                        {t('Spieltitel suchen', 'Search game titles')}
+                    </label>
                     <div className="search-input">
                         <Search size={19} />{' '}
                         <input

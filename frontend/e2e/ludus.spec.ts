@@ -222,8 +222,8 @@ test('search results, grouped files and administration layouts at desktop and ph
         ],
       }),
     );
-    for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: 900 });
+    for (const width of [2560, 1440, 390]) {
+      await page.setViewportSize({ width, height: width === 2560 ? 1298 : 900 });
       const main = page.getByRole('main');
       await page.goto('/add');
       await page.getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
@@ -441,14 +441,15 @@ test('library empty states, filters, views and pagination on desktop and mobile'
       });
       ids.push(game.id);
     }
-    for (const width of [1440, 390]) {
-      await page.setViewportSize({ width, height: 900 });
+    for (const width of [2560, 1440, 390]) {
+      await page.setViewportSize({ width, height: width === 2560 ? 1298 : 900 });
       await page.goto('/?' + new URLSearchParams({ query: prefix }));
       const toolbar = page.getByRole('group', { name: 'Bibliotheksaktionen' });
       const filters = page.locator('#library-filters');
       await toolbar.getByRole('button', { name: 'Poster-Ansicht' }).click();
       await expect(page.locator('.game-card')).toHaveCount(48);
       expect((await toolbar.boundingBox())?.y).toBe(60);
+      await page.screenshot({ path: info.outputPath('library-posters-' + width + '.png') });
       await page.getByRole('button', { name: 'Nächste' }).click();
       await expect(page.locator('.game-card')).toHaveCount(1);
       await expect(page.locator('.game-card h2')).toHaveText(prefix + ' · 49');
@@ -483,4 +484,40 @@ test('library empty states, filters, views and pagination on desktop and mobile'
   } finally {
     for (const id of ids) await authorized(request, `games/${id}`, 'DELETE');
   }
+});
+
+test('settings tiles, contextual navigation and aligned fields', async ({ page }, info) => {
+  await signIn(page);
+  await page.setViewportSize({ width: 1546, height: 911 });
+  const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
+  await expect(nav.getByRole('link', { name: 'Verlauf', exact: true })).toHaveCount(0);
+  await nav.getByRole('link', { name: 'Aktivität', exact: true }).click();
+  await nav.getByRole('link', { name: 'Verlauf', exact: true }).click();
+  await expect(page).toHaveURL(/activity\/history$/);
+  await nav.getByRole('link', { name: 'Einstellungen', exact: true }).click();
+  await nav.getByRole('link', { name: 'Indexer', exact: true }).click();
+  const add = page.getByRole('button', { name: 'Hinzufügen', exact: true });
+  await expect(add).toBeVisible();
+  expect(await add.boundingBox()).toMatchObject({ x: 240, width: 290, height: 74 });
+  await page.screenshot({ path: info.outputPath('indexers-desktop.png') });
+  await add.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Verwalten' }).click();
+  await expect(page.getByRole('button', { name: 'Karten' })).toBeVisible();
+  await nav.getByRole('link', { name: 'Allgemein & Sicherheit' }).click();
+  const field = page.getByLabel('Instanzname', { exact: true });
+  const fieldLabel = page.getByText('Instanzname', { exact: true });
+  await expect(field).toBeVisible();
+  expect(await field.boundingBox()).toMatchObject({ x: 500, width: 380, height: 35 });
+  expect(await fieldLabel.boundingBox()).toMatchObject({ x: 230, width: 250 });
+  await expect(page.getByRole('button', { name: 'Keine Änderungen' })).toBeDisabled();
+  await page.screenshot({ path: info.outputPath('general-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileLabel = (await fieldLabel.boundingBox())!;
+  const mobileField = (await field.boundingBox())!;
+  expect(mobileField.x).toBe(mobileLabel.x);
+  expect(mobileField.y).toBeGreaterThanOrEqual(mobileLabel.y + mobileLabel.height);
+  expect(mobileField.x + mobileField.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: info.outputPath('general-mobile.png') });
 });

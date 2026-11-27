@@ -106,6 +106,7 @@ export default function GameDetailsPage() {
                         onClick={() => setRemove(true)}
                     >
                         <Trash2 size={16} />
+                        {t('Entfernen', 'Remove')}
                     </Button>
                 </div>
             </div>
@@ -248,27 +249,23 @@ function GameFiles({ files }: { files: GameFile[] }) {
         if (group) group.push(file);
         else groups.set(file.contentKind, [file]);
     }
-    if (groups.size === 1)
-        return (
-            <div className="game-files">
-                {files.map((file) => (
-                    <FileRow key={file.id} file={file} />
-                ))}
-            </div>
-        );
     return (
         <div className="game-files">
             {[...new Set(['Base', 'Update', 'Dlc', ...groups.keys()])].map((kind) => {
                 const items = groups.get(kind);
                 return (
                     items && (
-                        <details className="file-group" key={kind} open={kind === 'Base'}>
+                        <details
+                            className="file-group"
+                            key={kind}
+                            open={kind === 'Base' || groups.size === 1}
+                        >
                             <summary>
                                 {kind === 'Update' ? t('Updates', 'Updates') : label(kind)}{' '}
                                 <span>({items.length})</span>
                             </summary>
                             {items.map((file) => (
-                                <FileRow key={file.id} file={file} grouped />
+                                <FileRow key={file.id} file={file} />
                             ))}
                         </details>
                     )
@@ -278,7 +275,7 @@ function GameFiles({ files }: { files: GameFile[] }) {
     );
 }
 
-function FileRow({ file, grouped = false }: { file: GameFile; grouped?: boolean }) {
+function FileRow({ file }: { file: GameFile }) {
     const { t, locale } = useLocale();
     return (
         <article className="file-row">
@@ -286,7 +283,6 @@ function FileRow({ file, grouped = false }: { file: GameFile; grouped?: boolean 
                 <div>
                     <h3>{file.originalFileName}</h3>
                     <div className="file-meta">
-                        {!grouped && <Badge value={file.contentKind} />}
                         <Badge value={file.verificationStatus} />
                         {file.missing && <Badge tone="bad">{t('Datei fehlt', 'File missing')}</Badge>}
                         <span>{bytes(file.size, locale)}</span>

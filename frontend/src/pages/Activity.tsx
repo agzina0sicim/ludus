@@ -31,7 +31,7 @@ function ListToolbar({
     const { t } = useLocale();
     return (
         <header className={embedded ? 'section-heading' : 'view-toolbar'}>
-            {embedded ? <h3>{title}</h3> : <h1>{title}</h1>}
+            {embedded ? <h3>{title}</h3> : <h1 className="sr-only">{title}</h1>}
             <Button onClick={reload}>
                 <RefreshCw size={16} />
                 {t('Aktualisieren', 'Refresh')}

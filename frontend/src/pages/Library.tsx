@@ -69,7 +69,7 @@ export default function LibraryPage() {
                 {t('Bibliothek', 'Library')}
             </h1>
             <div
-                className="library-toolbar"
+                className="view-toolbar library-toolbar"
                 role="group"
                 aria-label={t('Bibliotheksaktionen', 'Library actions')}
             >
@@ -92,6 +92,7 @@ export default function LibraryPage() {
                             onClick={() => changeView('grid')}
                         >
                             <Grid2X2 size={17} />
+                            <span>Poster</span>
                         </Button>
                         <Button
                             aria-label={t('Tabellen-Ansicht', 'Table view')}
@@ -100,6 +101,7 @@ export default function LibraryPage() {
                             onClick={() => changeView('table')}
                         >
                             <List size={17} />
+                            <span>{t('Tabelle', 'Table')}</span>
                         </Button>
                     </div>
                     <Button className="filter-toggle" popoverTarget="library-filters" title={filterLabel}>
@@ -211,7 +213,7 @@ export default function LibraryPage() {
                     games &&
                     (games.total === 0 ? (
                         <div className="library-empty">
-                            <h2>
+                            <h2 className={hasCriteria ? undefined : 'sr-only'}>
                                 {hasCriteria
                                     ? t('Keine passenden Spiele', 'No matching games')
                                     : t('Deine Bibliothek ist leer', 'Your library is empty')}
@@ -287,12 +289,14 @@ function PosterGrid({ games, platforms }: { games: Game[]; platforms: Platform[]
                     <div className="poster-status">
                         <Badge value={game.status} />
                     </div>
-                    <h2 title={game.title}>{game.title}</h2>
-                    <p title={game.platform}>
-                        {game.platform}
-                        {game.releaseYear && <> · {game.releaseYear}</>}
-                    </p>
-                    {!game.monitored && <small>{t('Nicht überwacht', 'Unmonitored')}</small>}
+                    <div className="poster-caption">
+                        <h2 title={game.title}>{game.title}</h2>
+                        <p title={game.platform}>
+                            {game.platform}
+                            {game.releaseYear && <> · {game.releaseYear}</>}
+                            {!game.monitored && <> · {t('Nicht überwacht', 'Unmonitored')}</>}
+                        </p>
+                    </div>
                 </Link>
             ))}
         </div>

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save } from 'lucide-react';
 import { api, login, resetCsrf } from '../api';
 import { useResource } from '../hooks';
 import { date, useLabel, useLocale } from '../i18n';
 import { CrudSection, Editor, Fields, payload, type FormField, type Values } from '../forms';
+import { SettingsLayout, SettingsActions } from '../SettingsToolbar';
 import * as schema from '../settings-schema';
 import { useSettingsSections } from '../settings-sections';
 import { Action, Badge, Button, Confirm, Empty, ErrorBox, Field, Loading, Modal, useToast } from '../ui';
@@ -14,21 +15,20 @@ export default function SettingsPage() {
     const { t } = useLocale();
     return (
         <section className="admin-page compact-page">
-            <header className="view-toolbar">
-                <h1>{t('Einstellungen', 'Settings')}</h1>
-            </header>
-            <Routes>
-                <Route index element={<SettingsDirectory />} />
-                <Route path="media" element={<MediaSettings />} />
-                <Route path="dat" element={<DatSettings />} />
-                <Route path="profiles" element={<ProfileSettings />} />
-                <Route path="indexers" element={<Indexers />} />
-                <Route path="clients" element={<Clients />} />
-                <Route path="metadata" element={<MetadataSettings />} />
-                <Route path="connect" element={<ConnectSettings />} />
-                <Route path="general" element={<GeneralSettings />} />
-                <Route path="*" element={<Navigate replace to="/settings/media" />} />
-            </Routes>
+            <SettingsLayout title={t('Einstellungen', 'Settings')}>
+                <Routes>
+                    <Route index element={<SettingsDirectory />} />
+                    <Route path="media" element={<MediaSettings />} />
+                    <Route path="dat" element={<DatSettings />} />
+                    <Route path="profiles" element={<ProfileSettings />} />
+                    <Route path="indexers" element={<Indexers />} />
+                    <Route path="clients" element={<Clients />} />
+                    <Route path="metadata" element={<MetadataSettings />} />
+                    <Route path="connect" element={<ConnectSettings />} />
+                    <Route path="general" element={<GeneralSettings />} />
+                    <Route path="*" element={<Navigate replace to="/settings/media" />} />
+                </Routes>
+            </SettingsLayout>
         </section>
     );
 }
@@ -111,6 +111,7 @@ function MediaSettings() {
 }
 function SettingsForm({ title, fields, hint }: { title: string; fields: FormField[]; hint?: string }) {
     const { t, setLocale } = useLocale();
+    const formId = useId();
     const data = useResource<Row>('settings');
     const toast = useToast();
     const [changes, setChanges] = useState<Values>({});
@@ -119,11 +120,25 @@ function SettingsForm({ title, fields, hint }: { title: string; fields: FormFiel
     return (
         <section className="settings-section">
             <h2>{title}</h2>
+            <SettingsActions>
+                <Button
+                    type="submit"
+                    form={formId}
+                    disabled={busy || !Object.keys(changes).length}
+                    busy={busy}
+                >
+                    <Save size={20} />
+                    {Object.keys(changes).length
+                        ? t('Speichern', 'Save')
+                        : t('Keine Änderungen', 'No changes')}
+                </Button>
+            </SettingsActions>
             {hint && <p className="muted">{hint}</p>}
             <ErrorBox error={error || data.error} retry={data.reload} />
             {data.data ? (
                 <form
-                    className="panel"
+                    id={formId}
+                    className="settings-form"
                     onSubmit={async (event) => {
                         event.preventDefault();
                         setBusy(true);
@@ -159,16 +174,6 @@ function SettingsForm({ title, fields, hint }: { title: string; fields: FormFiel
                             }}
                         />
                     </fieldset>
-                    <div className="section-footer">
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            busy={busy}
-                            disabled={!Object.keys(changes).length}
-                        >
-                            {t('Speichern', 'Save')}
-                        </Button>
-                    </div>
                 </form>
             ) : (
                 data.loading && <Loading />
@@ -185,6 +190,7 @@ function Indexers() {
                 'Prowlarr, Jackett und Newznab. Neue Einstellungen vor dem Test speichern. Newznab verwendet Usenet.',
                 'Prowlarr, Jackett, and Newznab. Save changes before testing. Newznab uses Usenet.',
             )}
+            cards
             endpoint="indexers"
             fields={schema.indexerFields}
             defaults={schema.indexerDefaults}
@@ -208,6 +214,7 @@ function Clients() {
                     'Ludus verarbeitet ausschließlich die Kategorie ludus. Neue Einstellungen vor dem Test speichern.',
                     'Ludus only processes the ludus category. Save changes before testing.',
                 )}
+                cards
                 endpoint="download-clients"
                 fields={schema.clientFields}
                 defaults={schema.clientDefaults}
@@ -248,6 +255,7 @@ function MetadataSettings() {
                     'IGDB: Twitch Client-ID und Secret. ScreenScraper: Entwickler-ID und Passwort sowie optional ein Benutzerkonto. Änderungen vor dem Test speichern.',
                     'IGDB: Twitch client ID and secret. ScreenScraper: developer ID and password, plus an optional user account. Save changes before testing.',
                 )}
+                cards
                 endpoint="metadata/providers"
                 fields={schema.providerFields}
                 defaults={{}}
@@ -1055,7 +1063,7 @@ function SecuritySettings() {
             <ErrorBox error={data.error} retry={data.reload} />
             {data.data ? (
                 <form
-                    className="panel"
+                    className="settings-form"
                     onSubmit={(event) => {
                         event.preventDefault();
                         setConfirm(true);

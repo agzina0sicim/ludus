@@ -1,17 +1,5 @@
 import { useState } from 'react';
-import {
-    Ban,
-    History,
-    Library,
-    ListOrdered,
-    LogOut,
-    Menu,
-    Plus,
-    Search,
-    Settings,
-    ShieldCheck,
-    User,
-} from 'lucide-react';
+import { Library, ListOrdered, LogOut, Menu, Search, Settings, ShieldCheck, User } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocale } from './i18n';
 import { useSettingsSections } from './settings-sections';
@@ -148,6 +136,8 @@ export function SidebarNavigation({
         ['logs', 'Logs'],
     ];
     const inGame = pathname.startsWith('/games/');
+    const inLibrary = inGame || pathname === '/' || pathname === '/add';
+    const inActivity = pathname.startsWith('/activity');
     return (
         <nav
             aria-label={t('Hauptnavigation', 'Main navigation')}
@@ -155,37 +145,37 @@ export function SidebarNavigation({
                 if (event.target instanceof Element && event.target.closest('a')) closeMenu();
             }}
         >
-            <div className="nav-group">
-                <p className="sidebar-caption">{t('Sammlung', 'Collection')}</p>
-                <Link
-                    to="/"
-                    aria-current={inGame ? 'location' : pathname === '/' ? 'page' : undefined}
-                    className={inGame || pathname === '/' ? 'active' : undefined}
-                >
+            <div className={inLibrary ? 'nav-group current' : 'nav-group'}>
+                <Link to="/" aria-current={pathname === '/' ? 'page' : inLibrary ? 'location' : undefined}>
                     <Library />
                     {t('Bibliothek', 'Library')}
                 </Link>
-                <NavLink className="nav-child" to="/add">
-                    <Plus />
-                    {t('Spiel hinzufügen', 'Add game')}
-                </NavLink>
+                {inLibrary && (
+                    <NavLink className="nav-child" to="/add">
+                        {t('Spiel hinzufügen', 'Add game')}
+                    </NavLink>
+                )}
             </div>
-            <div className="nav-group">
-                <p className="sidebar-caption">{t('Aktivität', 'Activity')}</p>
-                <NavLink to="/activity" end>
+            <div className={inActivity ? 'nav-group current' : 'nav-group'}>
+                <Link to="/activity" aria-current={inActivity ? 'location' : undefined}>
                     <ListOrdered />
-                    {t('Warteschlange', 'Queue')}
-                </NavLink>
-                <NavLink to="/activity/history">
-                    <History />
-                    {t('Verlauf', 'History')}
-                </NavLink>
-                <NavLink to="/activity/blocklist">
-                    <Ban />
-                    {t('Blocklist & Cooldowns', 'Blocklist & cooldowns')}
-                </NavLink>
+                    {t('Aktivität', 'Activity')}
+                </Link>
+                {inActivity && (
+                    <>
+                        <NavLink className="nav-child" end to="/activity">
+                            {t('Warteschlange', 'Queue')}
+                        </NavLink>
+                        <NavLink className="nav-child" to="/activity/history">
+                            {t('Verlauf', 'History')}
+                        </NavLink>
+                        <NavLink className="nav-child" to="/activity/blocklist">
+                            {t('Blocklist & Cooldowns', 'Blocklist & cooldowns')}
+                        </NavLink>
+                    </>
+                )}
             </div>
-            <div className="nav-group nav-admin">
+            <div className={pathname.startsWith('/settings') ? 'nav-group current' : 'nav-group'}>
                 <NavLink end to="/settings">
                     <Settings />
                     {t('Einstellungen', 'Settings')}
@@ -196,6 +186,8 @@ export function SidebarNavigation({
                             {label}
                         </NavLink>
                     ))}
+            </div>
+            <div className={pathname.startsWith('/system') ? 'nav-group current' : 'nav-group'}>
                 <Link to="/system">
                     <ShieldCheck />
                     System{healthCount > 0 && <span className="health-count">{healthCount}</span>}

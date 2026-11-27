@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Plus, Pencil, Trash2, PlugZap } from 'lucide-react';
+import { Plus, Pencil, Trash2, PlugZap, LayoutGrid, List } from 'lucide-react';
+import { SettingsActions } from './SettingsToolbar';
 import { api } from './api';
 import { useResource } from './hooks';
 import { useLabel, useLocale } from './i18n';
@@ -251,6 +252,7 @@ export function CrudSection({
     columns,
     testEndpoint,
     extra,
+    cards = false,
     allowCreate = true,
     idKey = 'id',
 }: {
@@ -263,6 +265,7 @@ export function CrudSection({
     testEndpoint?: (row: Row) => string;
     extra?: (row: Row) => ReactNode;
     allowCreate?: boolean;
+    cards?: boolean;
     idKey?: string;
 }) {
     const { t } = useLocale();
@@ -271,14 +274,66 @@ export function CrudSection({
     const data = useResource<Row[]>(endpoint);
     const [edit, setEdit] = useState<Values>();
     const [remove, setRemove] = useState<Row>();
+    const [tableView, setTableView] = useState(false);
+    const showCards = cards && !tableView;
+    const rowActions = (row: Row) => (
+        <div className="actions">
+            {extra?.(row)}
+            {testEndpoint && (
+                <Action
+                    run={async () => {
+                        await api(testEndpoint(row), { method: 'POST' });
+                        toast(t('Verbindung erfolgreich getestet.', 'Connection test succeeded.'));
+                    }}
+                >
+                    <PlugZap size={17} />
+                    {t('Testen', 'Test')}
+                </Action>
+            )}
+            <Button
+                className="icon-button"
+                aria-label={`${t('Bearbeiten', 'Edit')}: ${String(row.name ?? row.provider ?? row.host ?? row.id)}`}
+                onClick={() => setEdit({ ...row })}
+            >
+                <Pencil size={17} />
+            </Button>
+            {allowCreate && (
+                <Button
+                    className="icon-button"
+                    aria-label={`${t('Entfernen', 'Remove')}: ${String(row.name ?? row.host ?? row.id)}`}
+                    onClick={() => setRemove(row)}
+                >
+                    <Trash2 size={17} />
+                </Button>
+            )}
+        </div>
+    );
+    const cellValue = (value: unknown) =>
+        typeof value === 'boolean' ? (
+            <Badge tone={value ? 'good' : ''}>
+                {value ? t('Aktiv', 'Enabled') : t('Inaktiv', 'Disabled')}
+            </Badge>
+        ) : Array.isArray(value) ? (
+            (value as unknown[]).join(', ')
+        ) : (
+            label(String(value ?? '—'))
+        );
     return (
         <section className="settings-section">
+            {cards && (
+                <SettingsActions>
+                    <Button aria-pressed={tableView} onClick={() => setTableView(!tableView)}>
+                        {tableView ? <LayoutGrid /> : <List />}
+                        {tableView ? t('Karten', 'Cards') : t('Verwalten', 'Manage')}
+                    </Button>
+                </SettingsActions>
+            )}
             <div className="section-heading">
                 <div>
                     <h2>{title}</h2>
-                    {description && <p className="muted">{description}</p>}
+                    {description && !showCards && <p className="muted">{description}</p>}
                 </div>
-                {allowCreate && (
+                {allowCreate && !showCards && (
                     <Button onClick={() => setEdit({ ...defaults })}>
                         <Plus size={17} />
                         {t('Hinzufügen', 'Add')}
@@ -288,6 +343,33 @@ export function CrudSection({
             <ErrorBox error={data.error} retry={data.reload} />
             {data.loading && !data.data ? (
                 <Loading />
+            ) : showCards && data.data ? (
+                <div className="provider-grid">
+                    {data.data.map((row) => (
+                        <article className="provider-card" key={String(row[idKey])}>
+                            <h3>{cellValue(row[columns[0].key])}</h3>
+                            <dl>
+                                {columns.slice(1).map((column) => (
+                                    <div key={column.key}>
+                                        <dt>{column.label}</dt>
+                                        <dd>{cellValue(row[column.key])}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                            {rowActions(row)}
+                        </article>
+                    ))}
+                    {allowCreate && (
+                        <button
+                            className="provider-add"
+                            aria-label={t('Hinzufügen', 'Add')}
+                            title={t('Hinzufügen', 'Add')}
+                            onClick={() => setEdit({ ...defaults })}
+                        >
+                            <Plus />
+                        </button>
+                    )}
+                </div>
             ) : data.data?.length === 0 ? (
                 <Empty title={t('Noch keine Einträge', 'No entries yet')} />
             ) : (
@@ -305,63 +387,16 @@ export function CrudSection({
                             {data.data?.map((row) => (
                                 <tr key={String(row[idKey])}>
                                     {columns.map((column) => (
-                                        <td key={column.key}>
-                                            {typeof row[column.key] === 'boolean' ? (
-                                                <Badge tone={row[column.key] ? 'good' : ''}>
-                                                    {row[column.key]
-                                                        ? t('Aktiv', 'Enabled')
-                                                        : t('Inaktiv', 'Disabled')}
-                                                </Badge>
-                                            ) : Array.isArray(row[column.key]) ? (
-                                                (row[column.key] as unknown[]).join(', ')
-                                            ) : (
-                                                label(String(row[column.key] ?? '—'))
-                                            )}
-                                        </td>
+                                        <td key={column.key}>{cellValue(row[column.key])}</td>
                                     ))}
-                                    <td>
-                                        <div className="actions">
-                                            {extra?.(row)}
-                                            {testEndpoint && (
-                                                <Action
-                                                    run={async () => {
-                                                        await api(testEndpoint(row), { method: 'POST' });
-                                                        toast(
-                                                            t(
-                                                                'Verbindung erfolgreich getestet.',
-                                                                'Connection test succeeded.',
-                                                            ),
-                                                        );
-                                                    }}
-                                                >
-                                                    <PlugZap size={17} />
-                                                    {t('Testen', 'Test')}
-                                                </Action>
-                                            )}
-                                            <Button
-                                                className="icon-button"
-                                                aria-label={`${t('Bearbeiten', 'Edit')}: ${String(row.name ?? row.provider ?? row.host ?? row.id)}`}
-                                                onClick={() => setEdit({ ...row })}
-                                            >
-                                                <Pencil size={17} />
-                                            </Button>
-                                            {allowCreate && (
-                                                <Button
-                                                    className="icon-button"
-                                                    aria-label={`${t('Entfernen', 'Remove')}: ${String(row.name ?? row.host ?? row.id)}`}
-                                                    onClick={() => setRemove(row)}
-                                                >
-                                                    <Trash2 size={17} />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </td>
+                                    <td>{rowActions(row)}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
             )}
+            {showCards && description && <p className="muted provider-hint">{description}</p>}
             {edit && (
                 <Editor
                     title={title}
