@@ -124,7 +124,8 @@ test('production library, DAT scan, signed ROM download and all configuration ro
   );
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath('library-desktop.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Tabellen-Ansicht', exact: true }).click();
+  await page.getByRole('button', { name: 'Ansicht', exact: true }).click();
+  await page.getByRole('button', { name: 'Tabelle', exact: true }).click();
   await expect(page.getByRole('cell', { name: title, exact: true })).toBeVisible();
   for (const path of [
     '/activity',
@@ -356,7 +357,8 @@ test('configuration writes and responsive English navigation', async ({ page }, 
     .getByRole('link', { name: 'Library', exact: true })
     .click();
   await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Poster view', exact: true }).click();
+  await page.getByRole('button', { name: 'View', exact: true }).click();
+  await page.getByRole('button', { name: 'Posters', exact: true }).click();
   await expect(page.locator('#sidebar')).toHaveAttribute('aria-hidden', 'true');
   await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page
@@ -445,9 +447,34 @@ test('library empty states, filters, views and pagination on desktop and mobile'
       await page.setViewportSize({ width, height: width === 2560 ? 1298 : 900 });
       await page.goto('/?' + new URLSearchParams({ query: prefix }));
       const toolbar = page.getByRole('group', { name: 'Bibliotheksaktionen' });
-      const filters = page.locator('#library-filters');
-      await toolbar.getByRole('button', { name: 'Poster-Ansicht' }).click();
+      const filters = page.getByRole('dialog', { name: 'Erweiterte Filter' });
+      await toolbar.getByRole('button', { name: 'Ansicht', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Poster', exact: true }).click();
       await expect(page.locator('.game-card')).toHaveCount(48);
+      await toolbar.getByRole('button', { name: 'Optionen' }).click();
+      const options = page.getByRole('dialog');
+      await options.getByLabel('Postergröße').selectOption('large');
+      await options.getByLabel('Titel', { exact: true }).uncheck();
+      await options.getByRole('button', { name: 'Fertig' }).click();
+      await expect(page.locator('.poster-size-large')).toBeVisible();
+      await expect(page.locator('.game-card h2')).toHaveCount(0);
+      await toolbar.getByRole('button', { name: 'Optionen' }).click();
+      await options.getByLabel('Titel', { exact: true }).check();
+      await options.getByLabel('Postergröße').selectOption('medium');
+      await options.getByRole('button', { name: 'Fertig' }).click();
+      await toolbar.getByRole('button', { name: 'Sortierung' }).click();
+      await toolbar.getByRole('button', { name: 'Titel', exact: true }).click();
+      await expect(page.locator('.game-card h2').first()).toHaveText(prefix + ' · 49');
+      await page.getByRole('button', { name: 'Nächste' }).click();
+      await expect(page.locator('.game-card h2')).toHaveText(prefix + ' · 01');
+      await toolbar.getByRole('button', { name: 'Sortierung' }).click();
+      await toolbar.getByRole('button', { name: 'Titel', exact: true }).click();
+      await expect(page.locator('.game-card h2').first()).toHaveText(prefix + ' · 01');
+      await toolbar.getByRole('button', { name: 'Ansicht', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Übersicht', exact: true }).click();
+      await expect(page.locator('.library-overview > a')).toHaveCount(48);
+      await toolbar.getByRole('button', { name: 'Ansicht', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Poster', exact: true }).click();
       expect((await toolbar.boundingBox())?.y).toBe(60);
       await page.screenshot({ path: info.outputPath('library-posters-' + width + '.png') });
       await page.getByRole('button', { name: 'Nächste' }).click();
@@ -456,12 +483,35 @@ test('library empty states, filters, views and pagination on desktop and mobile'
       await page.getByRole('button', { name: 'Zurück', exact: true }).click();
       await expect(page.locator('.game-card')).toHaveCount(48);
       await toolbar.getByRole('button', { name: 'Filter', exact: true }).click();
+      const filterTrigger = toolbar.getByRole('button', { name: 'Filter', exact: true });
+      const menuBox = (await page.locator('#lib-filter').boundingBox())!;
+      const triggerBox = (await filterTrigger.boundingBox())!;
+      expect(Math.abs(menuBox.x + menuBox.width - triggerBox.x - triggerBox.width)).toBeLessThanOrEqual(1);
+      expect(menuBox.x).toBeGreaterThanOrEqual(0);
+      expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+      await page.screenshot({ path: info.outputPath('library-filter-' + width + '.png') });
+      await toolbar.getByRole('button', { name: 'Überwacht', exact: true }).click();
+      await expect(page.locator('.game-card')).toHaveCount(25);
+      await filterTrigger.click();
+      await toolbar.getByRole('button', { name: 'Erweiterte Filter …' }).click();
       await filters.getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
       await filters.getByLabel('Root Folder', { exact: true }).selectOption(String(rootId));
       await filters.getByLabel('Status', { exact: true }).selectOption('unmonitored');
+      await filters.getByLabel('Filtername').fill('Meine ROMs');
+      await filters.getByRole('button', { name: 'Filter speichern' }).click();
       await expect(page.locator('.game-card')).toHaveCount(24);
+      await toolbar.getByRole('button', { name: 'Filter', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Alle Spiele', exact: true }).click();
+      await expect(page.locator('.game-card')).toHaveCount(48);
+      await page.reload();
+      await toolbar.getByRole('button', { name: 'Filter', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Meine ROMs', exact: true }).click();
+      await expect(page.locator('.game-card')).toHaveCount(24);
+      await toolbar.getByRole('button', { name: 'Filter', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Erweiterte Filter …' }).click();
+      await filters.getByRole('button', { name: 'Filter entfernen Meine ROMs' }).click();
       await filters.getByLabel('Verifikation', { exact: true }).selectOption('VerifiedGoodDump');
-      await page.keyboard.press('Escape');
+      await filters.getByRole('button', { name: 'Anwenden' }).click();
       await expect(filters).toBeHidden();
       await expect(empty.getByRole('heading', { name: 'Keine passenden Spiele' })).toBeVisible();
       await empty.getByRole('button', { name: 'Filter zurücksetzen' }).click();
@@ -469,8 +519,13 @@ test('library empty states, filters, views and pagination on desktop and mobile'
       await expect(page).toHaveURL((url) => !url.search);
       await page.getByLabel('Spiele suchen').fill(prefix);
       await expect(page.locator('.game-card').first()).toContainText(prefix);
-      await toolbar.getByRole('button', { name: 'Tabellen-Ansicht' }).click();
+      await toolbar.getByRole('button', { name: 'Ansicht', exact: true }).click();
+      await toolbar.getByRole('button', { name: 'Tabelle', exact: true }).click();
       await expect(page.locator('.library-table tbody tr')).toHaveCount(48);
+      await toolbar.getByRole('button', { name: 'Optionen' }).click();
+      await options.getByLabel('Jahr').uncheck();
+      await options.getByRole('button', { name: 'Fertig' }).click();
+      await expect(page.getByRole('columnheader', { name: 'Jahr' })).toHaveCount(0);
       expect(
         (await page.locator('.library-table tbody tr').first().boundingBox())!.height,
       ).toBeLessThanOrEqual(48);

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 using Ludus.Application.Indexers;
 using Ludus.Application.Releases;
 using Ludus.Domain.Common;
@@ -40,7 +41,8 @@ public sealed class GamesController(AppDbContext database, MetadataService metad
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? query, [FromQuery] long? platformId, [FromQuery] long? rootFolderId,
         [FromQuery] string? status, [FromQuery] VerificationStatus? verification, [FromQuery, Range(1, int.MaxValue)] int page = 1,
-        [FromQuery, Range(1, 200)] int pageSize = 50, CancellationToken cancellationToken = default)
+        [FromQuery, Range(1, 200)] int pageSize = 50, [FromQuery] string sort = "title",
+        [FromQuery] bool descending = false, CancellationToken cancellationToken = default)
     {
         var games = database.Games.AsNoTracking().Where(x => (query == null || x.Title.Contains(query)) && (platformId == null || x.PlatformId == platformId)
             && (rootFolderId == null || x.RootFolderId == rootFolderId));
@@ -48,15 +50,26 @@ public sealed class GamesController(AppDbContext database, MetadataService metad
         {
             null or "all" => games, "missing" => games.Where(x => x.Status == GameStatus.Missing),
             "downloading" => games.Where(x => x.Status == GameStatus.Downloading), "available" => games.Where(x => x.Status == GameStatus.Available),
-            "unmonitored" => games.Where(x => !x.Monitored),
+            "monitored" => games.Where(x => x.Monitored), "unmonitored" => games.Where(x => !x.Monitored),
             "cutoffUnmet" => games.Where(x => x.Files.Any(f => !f.Missing && f.ContentKind == ContentKind.Base && f.Score < x.QualityProfile.UpgradeUntilScore)),
             _ => throw new ArgumentException("Invalid library status.")
         };
         if (verification is not null) games = games.Where(x => x.Files.Any(f => !f.Missing && f.VerificationStatus == verification));
         var total = await games.CountAsync(cancellationToken);
-        var items = await games.OrderBy(x => x.SortTitle).ThenBy(x => x.Id).Skip(checked((page - 1) * pageSize)).Take(pageSize)
+        IOrderedQueryable<Game> OrderBy<TKey>(Expression<Func<Game, TKey>> field) =>
+            descending ? games.OrderByDescending(field) : games.OrderBy(field);
+        var ordered = sort switch
+        {
+            "title" => OrderBy(x => x.SortTitle),
+            "platform" => OrderBy(x => x.Platform.Name),
+            "year" => OrderBy(x => x.ReleaseYear),
+            "status" => OrderBy(x => x.Status),
+            "files" => OrderBy(x => x.Files.Count(f => !f.Missing)),
+            _ => throw new ArgumentException("Invalid library sort field.")
+        };
+        var items = await ordered.ThenBy(x => x.Id).Skip(checked((page - 1) * pageSize)).Take(pageSize)
             .Select(x => new { x.Id, x.Title, x.ReleaseYear, x.PlatformId, platform = x.Platform.Name, x.RootFolderId, x.QualityProfileId, x.Monitored,
-                x.Status, x.CoverRelativePath, fileCount = x.Files.Count(f => !f.Missing), x.Version }).ToArrayAsync(cancellationToken);
+                x.Status, x.CoverRelativePath, x.Description, fileCount = x.Files.Count(f => !f.Missing), x.Version }).ToArrayAsync(cancellationToken);
         return Ok(new { page, pageSize, total, items });
     }
 

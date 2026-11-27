@@ -1,29 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
-import { Grid2X2, List, Plus, ScanLine, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, ScanLine } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, query } from '../api';
 import { useDebounce, useResource } from '../hooks';
-import { useLocale, useLabel } from '../i18n';
+import { useLocale } from '../i18n';
 import { Badge, Button, Cover, ErrorBox, Field, Loading, Modal, Pager, useToast } from '../ui';
 import type { Game, Page, Platform, RootFolder } from '../types';
 
+import LibraryControls from './LibraryControls';
+import {
+    columns,
+    columnNames,
+    initialOptions,
+    initialView,
+    persist,
+    readFilters,
+    filterKeys,
+    sortNames,
+    type Sort,
+    type Column,
+    type View,
+    type Options,
+    type Filters,
+} from './library-preferences';
+
 const pageSize = 48;
-const filterKeys = ['platformId', 'rootFolderId', 'status', 'verification'] as const;
 
 export default function LibraryPage() {
     const { t } = useLocale();
-    const label = useLabel();
     const [params, setParams] = useSearchParams();
     const search = params.get('query') ?? '';
     const debounced = useDebounce(search);
-    const [view, setView] = useState<'grid' | 'table'>(() => {
-        try {
-            return localStorage.getItem('ludus.view') === 'table' ? 'table' : 'grid';
-        } catch {
-            return 'grid';
-        }
-    });
-    const activeFilters = filterKeys.filter((key) => params.get(key)).length;
+    const [view, setView] = useState(initialView);
+    const [options, setOptions] = useState(initialOptions);
+    const filters = readFilters(params);
+    const requestedSort = params.get('sort') ?? 'title';
+    const sort = Object.hasOwn(sortNames, requestedSort) ? (requestedSort as Sort) : 'title';
+    const descending = params.get('direction') === 'desc';
+    const activeFilters = Object.keys(filters).length;
     const hasCriteria = activeFilters > 0 || Boolean(search);
     const [scan, setScan] = useState(false);
     const pageNumber = Number(params.get('page'));
@@ -40,28 +54,45 @@ export default function LibraryPage() {
     const platforms = useResource<Platform[]>('platforms');
     const roots = useResource<RootFolder[]>('root-folders');
     const data = useResource<Page<Game>>(
-        `games?${query({ query: debounced, platformId: params.get('platformId'), rootFolderId: params.get('rootFolderId'), status: params.get('status'), verification: params.get('verification'), page, pageSize })}`,
+        `games?${query({ query: debounced, ...filters, sort, descending: descending ? 'true' : undefined, page, pageSize })}`,
         60000,
     );
-    const filter = (key: string, value: string) =>
+    function updateQuery(change: (next: URLSearchParams) => void) {
         setParams((previous) => {
             const next = new URLSearchParams(previous);
-            value ? next.set(key, value) : next.delete(key);
+            change(next);
             next.delete('page');
             return next;
         });
-    function changeView(next: 'grid' | 'table') {
+    }
+    function applyFilters(filters: Filters) {
+        updateQuery((next) => {
+            for (const key of filterKeys) {
+                const value = filters[key];
+                if (value) next.set(key, value);
+                else next.delete(key);
+            }
+        });
+    }
+    function changeSort(field: Sort) {
+        updateQuery((next) => {
+            if (field === 'title') next.delete('sort');
+            else next.set('sort', field);
+            if (field === sort && !descending) next.set('direction', 'desc');
+            else next.delete('direction');
+        });
+    }
+    function changeView(next: View) {
         setView(next);
-        try {
-            localStorage.setItem('ludus.view', next);
-        } catch {
-            // Storage can be disabled while the current view remains usable.
-        }
+        persist('ludus.view', next);
+    }
+    function changeOptions(next: Options) {
+        setOptions(next);
+        persist('ludus.library.options', JSON.stringify(next));
     }
     const scanLabel = t('Bibliothek scannen', 'Scan library');
     const addLabel = t('Spiel hinzufügen', 'Add game');
     const resetLabel = t('Filter zurücksetzen', 'Reset filters');
-    const filterLabel = t('Filter', 'Filters');
     const games = data.data;
     return (
         <section className="library-page" ref={library} aria-labelledby="library-title">
@@ -83,120 +114,19 @@ export default function LibraryPage() {
                         <span>{t('Hinzufügen', 'Add game')}</span>
                     </Link>
                 </div>
-                <div className="library-tools">
-                    <div className="segmented" role="group" aria-label={t('Ansicht', 'View')}>
-                        <Button
-                            aria-label={t('Poster-Ansicht', 'Poster view')}
-                            title={t('Poster-Ansicht', 'Poster view')}
-                            aria-pressed={view === 'grid'}
-                            onClick={() => changeView('grid')}
-                        >
-                            <Grid2X2 size={17} />
-                            <span>Poster</span>
-                        </Button>
-                        <Button
-                            aria-label={t('Tabellen-Ansicht', 'Table view')}
-                            title={t('Tabellen-Ansicht', 'Table view')}
-                            aria-pressed={view === 'table'}
-                            onClick={() => changeView('table')}
-                        >
-                            <List size={17} />
-                            <span>{t('Tabelle', 'Table')}</span>
-                        </Button>
-                    </div>
-                    <Button className="filter-toggle" popoverTarget="library-filters" title={filterLabel}>
-                        <SlidersHorizontal size={17} />
-                        {filterLabel}
-                        {activeFilters > 0 && <span className="filter-count">{activeFilters}</span>}
-                    </Button>
-                </div>
-            </div>
-            <div
-                id="library-filters"
-                popover="auto"
-                className="library-filters"
-                role="group"
-                aria-label={filterLabel}
-            >
-                <div className="filter-heading">
-                    <strong>{filterLabel}</strong>
-                    <Button
-                        className="icon-button"
-                        popoverTarget="library-filters"
-                        popoverTargetAction="hide"
-                        aria-label={t('Filter schließen', 'Close filters')}
-                    >
-                        <X size={17} />
-                    </Button>
-                </div>
-                <Field label={t('Plattform', 'Platform')}>
-                    <select
-                        value={params.get('platformId') ?? ''}
-                        onChange={(event) => filter('platformId', event.target.value)}
-                    >
-                        <option value="">{t('Alle Plattformen', 'All platforms')}</option>
-                        {platforms.data?.map((p) => (
-                            <option key={p.id} value={p.id}>
-                                {p.name}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-                <Field label="Root Folder">
-                    <select
-                        value={params.get('rootFolderId') ?? ''}
-                        onChange={(event) => filter('rootFolderId', event.target.value)}
-                    >
-                        <option value="">{t('Alle Root Folders', 'All root folders')}</option>
-                        {roots.data?.map((root) => (
-                            <option key={root.id} value={root.id}>
-                                {root.name}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-                <Field label="Status">
-                    <select
-                        value={params.get('status') ?? ''}
-                        onChange={(event) => filter('status', event.target.value)}
-                    >
-                        {[
-                            ['', t('Jeder Status', 'Any status')],
-                            ['missing', t('Fehlend', 'Missing')],
-                            ['downloading', t('Herunterladend', 'Downloading')],
-                            ['available', t('Vorhanden', 'Available')],
-                            ['cutoffUnmet', t('Cutoff nicht erreicht', 'Cutoff unmet')],
-                            ['unmonitored', t('Nicht überwacht', 'Unmonitored')],
-                        ].map(([value, text]) => (
-                            <option key={value} value={value}>
-                                {text}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-                <Field label={t('Verifikation', 'Verification')}>
-                    <select
-                        value={params.get('verification') ?? ''}
-                        onChange={(event) => filter('verification', event.target.value)}
-                    >
-                        <option value="">{t('Jede Verifikation', 'Any verification')}</option>
-                        {['Unverified', 'VerifiedGoodDump', 'Modified'].map((value) => (
-                            <option key={value} value={value}>
-                                {label(value)}
-                            </option>
-                        ))}
-                    </select>
-                </Field>
-
-                {hasCriteria && (
-                    <Button
-                        popoverTarget="library-filters"
-                        popoverTargetAction="hide"
-                        onClick={() => setParams({})}
-                    >
-                        {resetLabel}
-                    </Button>
-                )}
+                <LibraryControls
+                    view={view}
+                    changeView={changeView}
+                    options={options}
+                    changeOptions={changeOptions}
+                    sort={sort}
+                    descending={descending}
+                    changeSort={changeSort}
+                    filters={filters}
+                    applyFilters={applyFilters}
+                    platforms={platforms.data ?? []}
+                    roots={roots.data ?? []}
+                />
             </div>
             <div className="library-results">
                 <ErrorBox
@@ -230,7 +160,16 @@ export default function LibraryPage() {
                                       )}
                             </p>
                             {hasCriteria ? (
-                                <Button onClick={() => setParams({})}>{resetLabel}</Button>
+                                <Button
+                                    onClick={() =>
+                                        updateQuery((next) => {
+                                            filterKeys.forEach((key) => next.delete(key));
+                                            next.delete('query');
+                                        })
+                                    }
+                                >
+                                    {resetLabel}
+                                </Button>
                             ) : (
                                 <div className="actions">
                                     <Link className="button primary" to="/add">
@@ -245,9 +184,11 @@ export default function LibraryPage() {
                             )}
                         </div>
                     ) : view === 'grid' ? (
-                        <PosterGrid games={games.items} platforms={platforms.data ?? []} />
+                        <PosterGrid games={games.items} platforms={platforms.data ?? []} options={options} />
+                    ) : view === 'overview' ? (
+                        <Overview games={games.items} description={options.overviewDescription} />
                     ) : (
-                        <GameTable games={games.items} />
+                        <GameTable games={games.items} visible={columns.filter((k) => options.table[k])} />
                     ))
                 )}
                 {games && (games.total > 0 || page > 1) && (
@@ -275,26 +216,50 @@ export default function LibraryPage() {
         </section>
     );
 }
-function PosterGrid({ games, platforms }: { games: Game[]; platforms: Platform[] }) {
+function PosterGrid({
+    games,
+    platforms,
+    options,
+}: {
+    games: Game[];
+    platforms: Platform[];
+    options: Options;
+}) {
     const { t } = useLocale();
     return (
-        <div className="poster-grid">
+        <div className={'poster-grid poster-size-' + options.size}>
             {games.map((game) => (
-                <Link className="game-card" key={game.id} to={`/games/${game.id}`}>
+                <Link
+                    className="game-card"
+                    aria-label={game.title}
+                    title={game.title}
+                    key={game.id}
+                    to={`/games/${game.id}`}
+                >
                     <Cover
                         path={game.coverRelativePath}
                         title={game.title}
                         accent={platforms.find((p) => p.id === game.platformId)?.accentColor}
                     />
-                    <div className="poster-status">
+                    <div
+                        className={options.poster.statusText ? 'poster-status' : 'poster-status strip-only'}
+                        title={game.status}
+                    >
                         <Badge value={game.status} />
                     </div>
                     <div className="poster-caption">
-                        <h2 title={game.title}>{game.title}</h2>
-                        <p title={game.platform}>
-                            {game.platform}
-                            {game.releaseYear && <> · {game.releaseYear}</>}
-                            {!game.monitored && <> · {t('Nicht überwacht', 'Unmonitored')}</>}
+                        {options.poster.title && <h2 title={game.title}>{game.title}</h2>}
+                        <p>
+                            {[
+                                options.poster.platform && game.platform,
+                                options.poster.platform && game.releaseYear,
+                                options.poster.monitored &&
+                                    (game.monitored
+                                        ? t('Überwacht', 'Monitored')
+                                        : t('Nicht überwacht', 'Unmonitored')),
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
                         </p>
                     </div>
                 </Link>
@@ -302,34 +267,59 @@ function PosterGrid({ games, platforms }: { games: Game[]; platforms: Platform[]
         </div>
     );
 }
-function GameTable({ games }: { games: Game[] }) {
+function Overview({ games, description }: { games: Game[]; description: boolean }) {
+    return (
+        <div className="library-overview">
+            {games.map((game) => (
+                <Link key={game.id} to={'/games/' + game.id}>
+                    <Cover path={game.coverRelativePath} title={game.title} />
+                    <div>
+                        <h2>{game.title}</h2>
+                        <p>{[game.platform, game.releaseYear].filter(Boolean).join(' · ')}</p>
+                        {description && game.description && <p className="clamp-3">{game.description}</p>}
+                        <Badge value={game.status} />
+                    </div>
+                </Link>
+            ))}
+        </div>
+    );
+}
+function GameTable({ games, visible }: { games: Game[]; visible: Column[] }) {
     const { t } = useLocale();
+    function cell(game: Game, column: Column) {
+        switch (column) {
+            case 'platform':
+                return game.platform;
+            case 'year':
+                return game.releaseYear ?? '—';
+            case 'status':
+                return <Badge value={game.status} />;
+            case 'monitored':
+                return game.monitored ? t('Ja', 'Yes') : t('Nein', 'No');
+            case 'files':
+                return game.fileCount;
+        }
+    }
     return (
         <div className="table-wrap library-table">
             <table aria-label={t('Spiele in der Bibliothek', 'Games in library')}>
                 <thead>
                     <tr>
                         <th>{t('Spiel', 'Game')}</th>
-                        <th>{t('Plattform', 'Platform')}</th>
-                        <th>{t('Jahr', 'Year')}</th>
-                        <th>Status</th>
-                        <th>{t('Überwacht', 'Monitored')}</th>
-                        <th>{t('Dateien', 'Files')}</th>
+                        {visible.map((k) => (
+                            <th key={k}>{t(...columnNames[k])}</th>
+                        ))}
                     </tr>
                 </thead>
                 <tbody>
                     {games.map((game) => (
                         <tr key={game.id}>
                             <td>
-                                <Link to={`/games/${game.id}`}>{game.title}</Link>
+                                <Link to={'/games/' + game.id}>{game.title}</Link>
                             </td>
-                            <td>{game.platform}</td>
-                            <td>{game.releaseYear ?? '—'}</td>
-                            <td>
-                                <Badge value={game.status} />
-                            </td>
-                            <td>{game.monitored ? t('Ja', 'Yes') : t('Nein', 'No')}</td>
-                            <td>{game.fileCount}</td>
+                            {visible.map((k) => (
+                                <td key={k}>{cell(game, k)}</td>
+                            ))}
                         </tr>
                     ))}
                 </tbody>

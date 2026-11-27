@@ -612,47 +612,6 @@
     display: flex;
     align-items: center;
   }
-  .filter-toggle {
-    anchor-name: --library-filter-toggle;
-  }
-  .filter-count {
-    padding: 0 5px;
-    min-width: 18px;
-    background: #483b29;
-    color: #ffd091;
-    border-radius: 4px;
-    font-size: 12px;
-  }
-  .library-filters {
-    position: fixed;
-    inset: calc(var(--header-height) + 54px) 16px auto auto;
-    margin: 0;
-    width: min(300px, calc(100vw - 24px));
-    max-height: calc(100dvh - var(--header-height) - 72px);
-    overflow: auto;
-    padding: 14px 16px;
-    background: #20262b;
-    color: #ddd;
-    border: 1px solid #454c54;
-    border-radius: 7px;
-    box-shadow: 0 8px 24px #0006;
-  }
-  @supports (top: anchor(bottom)) {
-    .library-filters {
-      position-anchor: --library-filter-toggle;
-      top: calc(anchor(bottom) + 6px);
-      right: anchor(right);
-    }
-  }
-  .library-filters .field {
-    margin-bottom: 12px;
-  }
-  .filter-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-  }
   .library-results {
     padding: 20px clamp(16px, 1.5vw, 36px) 36px;
   }
@@ -1623,14 +1582,6 @@
   clip-path: inset(50%);
   overflow: hidden;
 }
-.filter-toggle {
-  position: relative;
-}
-.filter-count {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-}
 .admin-page {
   padding: 0 var(--gutter) 28px;
 }
@@ -2132,5 +2083,161 @@
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.library-controls > .button,
+.library-menu > .button {
+  min-width: 60px;
+  position: relative;
+}
+.library-controls {
+  gap: 0;
+}
+.library-controls > .button {
+  margin-right: 12px;
+}
+.library-controls > .button::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 10px;
+  bottom: 10px;
+  border-right: 1px solid #555;
+}
+.view-toolbar .button .menu-caret {
+  position: absolute;
+  right: 1px;
+  top: 30px;
+  width: 9px;
+  height: 9px;
+}
+.library-menu:has(:popover-open) > .button,
+.library-menu .has-filter {
+  color: #69c7e5;
+}
+.library-dropdown {
+  position: fixed;
+  inset: 120px 8px auto auto;
+  margin: 0;
+  min-width: 150px;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 16px));
+  max-height: calc(100dvh - 144px);
+  overflow: auto;
+  padding: 0;
+  border: 0;
+  background: #333;
+  color: #ddd;
+  box-shadow: 0 3px 10px #0008;
+}
+@supports (top: anchor(bottom)) {
+  .library-dropdown {
+    top: anchor(bottom);
+    right: anchor(right);
+  }
+}
+.library-dropdown > button {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  padding: 7px 14px 7px 8px;
+  gap: 6px;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+.library-dropdown > button:hover,
+.library-dropdown > button:focus-visible {
+  background: #444;
+}
+.library-dropdown .selection-mark {
+  width: 17px;
+  flex: none;
+  color: #69c7e5;
+}
+.library-dropdown hr {
+  border: 0;
+  border-top: 1px solid #555;
+  margin: 4px 0;
+}
+.library-options {
+  display: grid;
+  gap: 12px;
+}
+.library-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.saved-filter-list {
+  list-style: none;
+  padding: 0;
+}
+.saved-filter-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.library-overview > a {
+  display: flex;
+  gap: 18px;
+  padding: 12px 0;
+  color: inherit;
+  border-bottom: 1px solid #494949;
+}
+.library-overview .cover {
+  width: 74px;
+  flex: none;
+  aspect-ratio: 2/3;
+}
+.library-overview .cover-fallback {
+  padding: 4px;
+}
+.library-overview .cover-fallback > :not(svg) {
+  display: none;
+}
+.library-overview h2 {
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.library-overview p {
+  margin: 4px 0 8px;
+  color: #bbb;
+}
+.poster-size-small {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+.poster-size-large {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 205px), 1fr));
+}
+.strip-only .badge {
+  font-size: 0;
+  line-height: 5px;
+  min-height: 5px;
+}
+@media (max-width: 760px) {
+  .library-controls > .button,
+  .library-menu > .button {
+    min-width: 49px;
+  }
+  .library-toolbar {
+    row-gap: 0;
+  }
+  .library-toolbar .library-controls {
+    margin-left: auto;
+  }
+  .library-controls > .button {
+    margin-right: 4px;
+  }
+  .library-controls > .button::after {
+    right: -2px;
+  }
+  .library-dropdown {
+    max-height: calc(100dvh - 190px);
   }
 }

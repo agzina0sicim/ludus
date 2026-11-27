@@ -17,6 +17,7 @@ export type Game = {
   releaseYear: number | null;
   coverRelativePath: string | null;
   fileCount: number;
+  description?: string | null;
 };
 export type GameFile = {
   id: number;
