@@ -245,7 +245,6 @@ export function Editor({
 }
 export function CrudSection({
     title,
-    description,
     endpoint,
     fields,
     defaults,
@@ -257,7 +256,6 @@ export function CrudSection({
     idKey = 'id',
 }: {
     title: string;
-    description?: string;
     endpoint: string;
     fields: FormField[];
     defaults: Values;
@@ -331,7 +329,6 @@ export function CrudSection({
             <div className="section-heading">
                 <div>
                     <h2>{title}</h2>
-                    {description && !showCards && <p className="muted">{description}</p>}
                 </div>
                 {allowCreate && !showCards && (
                     <Button onClick={() => setEdit({ ...defaults })}>
@@ -396,7 +393,6 @@ export function CrudSection({
                     </table>
                 </div>
             )}
-            {showCards && description && <p className="muted provider-hint">{description}</p>}
             {edit && (
                 <Editor
                     title={title}

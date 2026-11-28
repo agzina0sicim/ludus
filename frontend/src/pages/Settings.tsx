@@ -50,17 +50,10 @@ function SettingsDirectory() {
 function MediaSettings() {
     const { t } = useLocale();
     const [monitor, setMonitor] = useState<Row>();
-    const capabilities = useResource<{ permissionsSupported: boolean; permissionPlatform: string }>(
-        'settings/capabilities',
-    );
     return (
         <>
             <CrudSection
                 title="Root Folders"
-                description={t(
-                    'Bestehende, absolute Ordnerpfade auf dem Ludus-Host. Jedes Spiel erhält einen Root Folder.',
-                    'Existing absolute directories on the Ludus host. Each game is assigned a root folder.',
-                )}
                 endpoint="root-folders"
                 fields={schema.rootFields}
                 defaults={{ name: '', path: '' }}
@@ -70,24 +63,8 @@ function MediaSettings() {
                 ]}
             />
             <SettingsForm
-                title={t('Import & Benennung', 'Import & naming')}
-                fields={schema.mediaFields}
-                hint={t(
-                    'Tokens: {RootFolder}, {Game Title}, {Year}, {Region}, {ext}. Hardlinks erhalten Torrent-Dateien zum Seeden.',
-                    'Tokens: {RootFolder}, {Game Title}, {Year}, {Region}, {ext}. Hardlinks retain torrent files for seeding.',
-                )}
+                sections={[{ title: t('Import & Benennung', 'Import & naming'), fields: schema.mediaFields }]}
             />
-            <p className="hint">
-                {capabilities.data?.permissionsSupported
-                    ? t(
-                          'Datei- und Ordnerrechte sowie die optionale Gruppe wirken auf diesem Linux-System. Bei Hardlinks bleiben Dateirechte und Gruppe unverändert, damit die Quelldatei nicht verändert wird.',
-                          'File and directory permissions and the optional group are active on this Linux system. For hardlinks, file mode and group remain unchanged so the source is not modified.',
-                      )
-                    : t(
-                          'Dateirechte und Mediengruppe sind auf diesem System nicht verfügbar; die Prozess-UMASK gilt.',
-                          'File permissions and media group are unavailable on this system; the process umask applies.',
-                      )}
-            </p>
             <CrudSection
                 title={t('Plattformen', 'Platforms')}
                 endpoint="platforms"
@@ -125,17 +102,13 @@ function MediaSettings() {
         </>
     );
 }
-function SettingsForm({
-    title,
-    fields,
-    hint,
-    preview,
-}: {
+type SettingsFormSection = {
     title: string;
     fields: FormField[];
-    hint?: string;
     preview?: (values: Values) => ReactNode;
-}) {
+};
+
+function SettingsForm({ sections }: { sections: SettingsFormSection[] }) {
     const { t, setLocale } = useLocale();
     const formId = useId();
     const data = useResource<Row>('settings');
@@ -143,81 +116,83 @@ function SettingsForm({
     const [changes, setChanges] = useState<Values>({});
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<unknown>();
+    const dirty = Object.keys(changes).length > 0;
+    const values = { ...data.data, ...changes };
     return (
-        <section className="settings-section">
-            <h2>{title}</h2>
+        <>
             <SettingsActions>
-                <Button
-                    type="submit"
-                    form={formId}
-                    disabled={busy || !Object.keys(changes).length}
-                    busy={busy}
-                >
+                <Button type="submit" form={formId} disabled={busy || !dirty} busy={busy}>
                     <Save size={20} />
-                    {Object.keys(changes).length
-                        ? t('Speichern', 'Save')
-                        : t('Keine Änderungen', 'No changes')}
+                    {dirty ? t('Speichern', 'Save') : t('Keine Änderungen', 'No changes')}
                 </Button>
             </SettingsActions>
-            {hint && <p className="muted">{hint}</p>}
             <ErrorBox error={error || data.error} retry={data.reload} />
-            {data.data ? (
-                <form
-                    id={formId}
-                    className="settings-form"
-                    onSubmit={async (event) => {
-                        event.preventDefault();
-                        setBusy(true);
-                        setError(undefined);
-                        try {
-                            const current = await api<Row>('settings');
-                            const merged = { ...current, ...changes };
-                            await api('settings', {
-                                method: 'PUT',
-                                body: payload(
-                                    [
-                                        ...schema.mediaFields,
-                                        ...schema.generalFields,
-                                        ...schema.metadataLanguageFields,
-                                        ...schema.indexerPolicyFields,
-                                        ...schema.downloadHandlingFields,
-                                        ...schema.dateDisplayFields,
-                                        ...schema.appearanceFields,
-                                        ...schema.languageFields,
-                                    ],
-                                    merged,
-                                ),
-                            });
-                            setChanges({});
-                            if ('language' in changes) setLocale(merged.language === 'en' ? 'en' : 'de');
-                            toast(t('Einstellungen gespeichert.', 'Settings saved.'));
-                        } catch (err) {
-                            setError(err);
-                        } finally {
-                            setBusy(false);
-                        }
-                    }}
-                >
-                    <fieldset disabled={busy}>
-                        <Fields
-                            fields={fields}
-                            values={{ ...data.data, ...changes }}
-                            onChange={(next) => {
-                                const changed = Object.fromEntries(
-                                    fields
-                                        .filter((field) => next[field.key] !== data.data![field.key])
-                                        .map((field) => [field.key, next[field.key]]),
-                                );
-                                setChanges(changed);
-                            }}
-                        />
-                        {preview?.({ ...data.data, ...changes })}
-                    </fieldset>
-                </form>
-            ) : (
-                data.loading && <Loading />
-            )}
-        </section>
+            <form
+                id={formId}
+                onSubmit={async (event) => {
+                    event.preventDefault();
+                    if (busy || !dirty) return;
+                    setBusy(true);
+                    setError(undefined);
+                    try {
+                        const current = await api<Row>('settings');
+                        const merged = { ...current, ...changes };
+                        await api('settings', {
+                            method: 'PUT',
+                            body: payload(
+                                [
+                                    ...schema.mediaFields,
+                                    ...schema.generalFields,
+                                    ...schema.metadataLanguageFields,
+                                    ...schema.indexerPolicyFields,
+                                    ...schema.downloadHandlingFields,
+                                    ...schema.dateDisplayFields,
+                                    ...schema.appearanceFields,
+                                    ...schema.languageFields,
+                                ],
+                                merged,
+                            ),
+                        });
+                        setChanges({});
+                        if ('language' in changes) setLocale(merged.language === 'en' ? 'en' : 'de');
+                        toast(t('Einstellungen gespeichert.', 'Settings saved.'));
+                    } catch (err) {
+                        setError(err);
+                    } finally {
+                        setBusy(false);
+                    }
+                }}
+            >
+                <fieldset disabled={busy}>
+                    {sections.map(({ title, fields, preview }) => (
+                        <section className="settings-section" key={title}>
+                            <h2>{title}</h2>
+                            {data.data && (
+                                <div className="settings-form">
+                                    <Fields
+                                        fields={fields}
+                                        values={values}
+                                        onChange={(next) => {
+                                            const current = data.data;
+                                            setChanges(
+                                                Object.fromEntries(
+                                                    sections
+                                                        .flatMap((section) => section.fields)
+                                                        .filter(({ key }) => next[key] !== current?.[key])
+                                                        .map(({ key }) => [key, next[key]]),
+                                                ),
+                                            );
+                                        }}
+                                    />
+                                    {preview?.(values)}
+                                </div>
+                            )}
+                        </section>
+                    ))}
+                    {!data.data && data.loading && <Loading />}
+                </fieldset>
+            </form>
+        </>
     );
 }
 function Indexers() {
@@ -238,7 +213,11 @@ function Indexers() {
                 ]}
                 testEndpoint={(row) => `indexers/${row.id}/test`}
             />
-            <SettingsForm title={t('Auswahl & RSS', 'Selection & RSS')} fields={schema.indexerPolicyFields} />
+            <SettingsForm
+                sections={[
+                    { title: t('Auswahl & RSS', 'Selection & RSS'), fields: schema.indexerPolicyFields },
+                ]}
+            />
         </>
     );
 }
@@ -260,7 +239,9 @@ function Clients() {
                 ]}
                 testEndpoint={(row) => `download-clients/${row.id}/test`}
             />
-            <SettingsForm title="Completed Download Handling" fields={schema.downloadHandlingFields} />
+            <SettingsForm
+                sections={[{ title: 'Completed Download Handling', fields: schema.downloadHandlingFields }]}
+            />
             <CrudSection
                 title="Remote Path Mappings"
                 endpoint="remote-path-mappings"
@@ -281,19 +262,15 @@ function MetadataSettings() {
     return (
         <>
             <SettingsForm
-                title={t('Metadatensprache', 'Metadata language')}
-                fields={schema.metadataLanguageFields}
-                hint={t(
-                    'Diese Auswahl ist unabhängig von der Sprache der Oberfläche. Feldweise Fallbacks bleiben in den Spieldetails sichtbar.',
-                    'This selection is independent of the interface language. Per-field fallbacks remain visible in game details.',
-                )}
+                sections={[
+                    {
+                        title: t('Metadatensprache', 'Metadata language'),
+                        fields: schema.metadataLanguageFields,
+                    },
+                ]}
             />
             <CrudSection
                 title={t('Metadaten-Provider', 'Metadata providers')}
-                description={t(
-                    'IGDB: Twitch Client-ID und Secret. ScreenScraper: Entwickler-ID und Passwort sowie optional ein Benutzerkonto. Änderungen vor dem Test speichern.',
-                    'IGDB: Twitch client ID and secret. ScreenScraper: developer ID and password, plus an optional user account. Save changes before testing.',
-                )}
                 cards
                 endpoint="metadata/providers"
                 fields={schema.providerFields}
@@ -373,12 +350,6 @@ function DatSettings() {
     return (
         <section className="settings-section">
             <h2>{t('DAT-Dateien', 'DAT files')}</h2>
-            <p className="muted">
-                {t(
-                    'Importiere No-Intro- oder Redump-Dateien im Logiqx-XML-Format (max. 256 MiB). Nach einem Import prüft ein Bibliothek-Scan deine Dateien erneut.',
-                    'Import No-Intro or Redump files in Logiqx XML format (max. 256 MiB). Run a library scan after import to recheck your files.',
-                )}
-            </p>
             <form
                 className="panel upload-form"
                 onSubmit={async (event) => {
@@ -543,12 +514,6 @@ function ProfileSettings({ view }: { view: 'profiles' | 'formats' }) {
                 <div className="section-heading">
                     <div>
                         <h2>{t('Qualitätsprofile', 'Quality profiles')}</h2>
-                        <p className="muted">
-                            {t(
-                                'Mindest-Score, Upgrade-Cutoff und gewichtete Formate bestimmen die Release-Auswahl.',
-                                'Minimum score, upgrade cutoff, and weighted formats determine release selection.',
-                            )}
-                        </p>
                     </div>
                     <Button
                         onClick={() =>
@@ -965,12 +930,6 @@ function ConnectSettings() {
             <div className="section-heading">
                 <div>
                     <h2>{t('Benachrichtigungen', 'Notifications')}</h2>
-                    <p className="muted">
-                        {t(
-                            'Discord, Gotify, Telegram und generische HTTP-Webhooks. Ein Test sendet eine echte Testnachricht.',
-                            'Discord, Gotify, Telegram, and generic HTTP webhooks. Testing sends a real test notification.',
-                        )}
-                    </p>
                 </div>
                 <Button
                     onClick={() =>
@@ -1116,8 +1075,12 @@ function GeneralSettings() {
     return (
         <>
             <SettingsForm
-                title={t('Allgemein & Zeitpläne', 'General & schedules')}
-                fields={schema.generalFields}
+                sections={[
+                    {
+                        title: t('Allgemein & Zeitpläne', 'General & schedules'),
+                        fields: schema.generalFields,
+                    },
+                ]}
             />
             <SecuritySettings />
             <ApiKeySettings />
@@ -1128,38 +1091,33 @@ function UiSettings() {
     const { t, locale } = useLocale();
     const example = new Date('2026-11-23T17:45:00Z');
     return (
-        <>
-            <SettingsForm
-                title={t('Datumsanzeige', 'Date display')}
-                fields={schema.dateDisplayFields}
-                preview={(values) => {
-                    const display = {
-                        shortDateFormat: String(values.shortDateFormat),
-                        longDateFormat: String(values.longDateFormat),
-                        use12HourTime: Boolean(values.use12HourTime),
-                    };
-                    return (
-                        <div className="panel">
-                            <h3>{t('Vorschau', 'Preview')}</h3>
-                            <p>
-                                {dateOnly(example, locale, 'short', display)} ·{' '}
-                                {dateOnly(example, locale, 'long', display)} ·{' '}
-                                {timeOnly(example, locale, display)}
-                            </p>
-                        </div>
-                    );
-                }}
-            />
-            <SettingsForm title={t('Darstellung', 'Appearance')} fields={schema.appearanceFields} />
-            <SettingsForm
-                title={t('Sprache', 'Language')}
-                fields={schema.languageFields}
-                hint={t(
-                    'Die Metadatensprache bleibt bei einem Wechsel unverändert.',
-                    'The metadata language remains unchanged when switching.',
-                )}
-            />
-        </>
+        <SettingsForm
+            sections={[
+                {
+                    title: t('Datumsanzeige', 'Date display'),
+                    fields: schema.dateDisplayFields,
+                    preview: (values) => {
+                        const display = {
+                            shortDateFormat: String(values.shortDateFormat),
+                            longDateFormat: String(values.longDateFormat),
+                            use12HourTime: Boolean(values.use12HourTime),
+                        };
+                        return (
+                            <div className="panel">
+                                <h3>{t('Vorschau', 'Preview')}</h3>
+                                <p>
+                                    {dateOnly(example, locale, 'short', display)} ·{' '}
+                                    {dateOnly(example, locale, 'long', display)} ·{' '}
+                                    {timeOnly(example, locale, display)}
+                                </p>
+                            </div>
+                        );
+                    },
+                },
+                { title: t('Darstellung', 'Appearance'), fields: schema.appearanceFields },
+                { title: t('Sprache', 'Language'), fields: schema.languageFields },
+            ]}
+        />
     );
 }
 function SecuritySettings() {
@@ -1172,12 +1130,6 @@ function SecuritySettings() {
     return (
         <section className="settings-section">
             <h2>{t('Anmeldung & Reverse Proxy', 'Login & reverse proxy')}</h2>
-            <p className="muted">
-                {t(
-                    'Das Speichern meldet alle Sitzungen ab und widerruft bestehende Medien-Links. Nur private Netze und Loopback sind als Proxy-Netze zulässig.',
-                    'Saving signs out all sessions and revokes existing media links. Only private and loopback proxy networks are allowed.',
-                )}
-            </p>
             <ErrorBox error={data.error} retry={data.reload} />
             {data.data ? (
                 <form
@@ -1244,12 +1196,6 @@ function ApiKeySettings() {
     return (
         <section className="settings-section">
             <h2>API-Key</h2>
-            <p className="muted">
-                {t(
-                    'Ausschließlich für externe Integrationen im X-Api-Key-Header. Der Browser-Login verwendet immer das Administratorkonto. Ein Reset widerruft den alten Key, alle Sitzungen und Medien-Links.',
-                    'Only for external integrations through the X-Api-Key header. Browser sign-in always uses the administrator account. Reset revokes the old key, all sessions, and media links.',
-                )}
-            </p>
             <div className="panel">
                 <div className="actions">
                     {key ? (

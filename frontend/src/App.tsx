@@ -308,7 +308,7 @@ function Shell({ logout }: { logout: () => void }) {
     const sidebar = useRef<HTMLElement>(null);
     const main = useRef<HTMLElement>(null);
     const opener = useRef<HTMLElement | null>(null);
-    const live = useRealtime();
+    const liveEvent = useRealtime();
     useEffect(() => {
         if (settings.data) {
             applyDefaultLocale(settings.data.language);
@@ -389,7 +389,6 @@ function Shell({ logout }: { logout: () => void }) {
             <ShellHeader
                 brand={<Brand />}
                 languageSwitch={<LanguageSwitch />}
-                connected={live.state === 'connected'}
                 menuOpen={mobile && menu}
                 openMenu={() => {
                     opener.current = document.activeElement as HTMLElement;
@@ -434,11 +433,11 @@ function Shell({ logout }: { logout: () => void }) {
             </aside>
             <main ref={main} tabIndex={-1} id="main" className="main-content" inert={mobile && menu}>
                 <ErrorBox error={logoutError} />
-                {live.event && ['scanUpdated', 'importStatus', 'rssUpdated'].includes(live.event.name) && (
+                {liveEvent && ['scanUpdated', 'importStatus', 'rssUpdated'].includes(liveEvent) && (
                     <div className="live-notice" role="status">
-                        {live.event.name === 'scanUpdated'
+                        {liveEvent === 'scanUpdated'
                             ? t('Bibliothek-Scan aktualisiert', 'Library scan updated')
-                            : live.event.name === 'rssUpdated'
+                            : liveEvent === 'rssUpdated'
                               ? t('RSS-Synchronisierung aktualisiert', 'RSS sync updated')
                               : t('Import-Status aktualisiert', 'Import status updated')}
                     </div>

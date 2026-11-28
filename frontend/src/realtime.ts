@@ -4,8 +4,7 @@ import { api, csrfToken } from './api';
 import type { Session } from './types';
 
 export function useRealtime() {
-  const [state, setState] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting');
-  const [event, setEvent] = useState<{ name: string; received: number }>();
+  const [event, setEvent] = useState<string>();
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     const reconnect = () => setRevision((value) => value + 1);
@@ -13,7 +12,6 @@ export function useRealtime() {
     return () => window.removeEventListener('ludus:reconnect', reconnect);
   }, []);
   useEffect(() => {
-    setState('connecting');
     let disposed = false;
     let retry: ReturnType<typeof setTimeout>;
     let noticeTimer: ReturnType<typeof setTimeout>;
@@ -45,36 +43,23 @@ export function useRealtime() {
           ].forEach((name) =>
             connection!.on(name, () => {
               if (disposed) return;
-              setEvent({ name, received: Date.now() });
+              setEvent(name);
               clearTimeout(noticeTimer);
               noticeTimer = setTimeout(() => setEvent(undefined), 8000);
               window.dispatchEvent(new Event('ludus:refresh'));
             }),
           );
-          connection.onreconnecting(() => {
-            if (!disposed) setState('reconnecting');
-          });
           connection.onreconnected(() => {
-            if (!disposed) {
-              setState('connected');
-              window.dispatchEvent(new Event('ludus:refresh'));
-            }
+            if (!disposed) window.dispatchEvent(new Event('ludus:refresh'));
           });
           connection.onclose(() => {
-            if (!disposed) {
-              setState('reconnecting');
-              retry = setTimeout(() => void start(), 5000);
-            }
+            if (!disposed) retry = setTimeout(() => void start(), 5000);
           });
         }
         await connection.start();
         if (disposed) await connection.stop();
-        else setState('connected');
       } catch {
-        if (!disposed) {
-          setState('reconnecting');
-          retry = setTimeout(() => void start(), 10000);
-        }
+        if (!disposed) retry = setTimeout(() => void start(), 10000);
       }
     }
     void start();
@@ -85,5 +70,5 @@ export function useRealtime() {
       void connection?.stop();
     };
   }, [revision]);
-  return { state, event };
+  return event;
 }

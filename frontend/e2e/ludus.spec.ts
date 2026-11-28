@@ -41,7 +41,6 @@ async function signIn(page: Page) {
     await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
   }
   await expect(page.getByRole('heading', { name: 'Bibliothek', exact: true })).toBeVisible();
-  await expect(page.getByText('Live verbunden', { exact: true })).toBeVisible();
 }
 test.beforeAll(async ({ request }) => {
   if (!directory) return;
@@ -98,16 +97,15 @@ test('production library, DAT scan, signed ROM download and all configuration ro
   expect(await page.getByRole('banner').boundingBox()).toMatchObject({ x: 0, y: 0, height: 60 });
   expect(await sidebar.boundingBox()).toMatchObject({ x: 0, y: 60, width: 210 });
   expect(await main.boundingBox()).toMatchObject({ x: 210, y: 60 });
-  await page.goto('/add');
-  await page.getByLabel('Plattform', { exact: true }).selectOption(String(platformId));
-  await page.getByRole('button', { name: 'Manuell hinzufügen' }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Titel', { exact: true }).fill(title);
-  await dialog.getByLabel('Root Folder', { exact: true }).selectOption(String(rootId));
-  await dialog.getByLabel('Qualitätsprofil', { exact: true }).selectOption(String(profileId));
-  await dialog.getByRole('button', { name: 'Hinzufügen', exact: true }).click();
+  const { id: gameId } = (await authorized(request, 'games', 'POST', {
+    title,
+    platformId,
+    rootFolderId: rootId,
+    qualityProfileId: profileId,
+    monitored: true,
+  })) as { id: number };
+  await page.goto(`/games/${gameId}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  const gameId = Number(new URL(page.url()).pathname.split('/').pop());
   await expect(
     page.locator('#sidebar').getByRole('link', { name: 'Bibliothek', exact: true }),
   ).toHaveAttribute('aria-current', 'location');
@@ -439,9 +437,13 @@ test('security changes end the old session and forms login uses the updated conf
     await expect(page.getByRole('form', { name: 'Anmelden', exact: true })).toBeVisible();
     await page.getByLabel('Benutzername', { exact: true }).fill(administrator);
     await page.getByLabel('Passwort', { exact: true }).fill(password);
-    await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
+    await Promise.all([
+      page.waitForResponse(
+        (response) => response.url().includes('/hubs/activity/negotiate?') && response.ok(),
+      ),
+      page.getByRole('button', { name: 'Anmelden', exact: true }).click(),
+    ]);
     await expect(page.getByRole('heading', { name: 'Einstellungen', exact: true })).toBeVisible();
-    await expect(page.getByText('Live verbunden', { exact: true })).toBeVisible();
   } finally {
     await authorized(request, 'auth/security', 'PUT', {
       ...original,
@@ -633,26 +635,37 @@ test('settings tiles, contextual navigation and aligned fields', async ({ page }
 test('UI date preview and light, dark, and automatic themes react immediately', async ({ page }) => {
   await signIn(page);
   await page.goto('/settings/ui');
+  const toolbar = page.locator('.settings-toolbar');
+  await expect(toolbar.getByRole('button')).toHaveCount(1);
+  await expect(toolbar.getByRole('button', { name: 'Keine Änderungen' })).toBeDisabled();
   const dates = page.locator('section.settings-section').filter({
     has: page.getByRole('heading', { name: 'Datumsanzeige', exact: true }),
   });
   await dates.getByLabel('Kurzes Datumsformat', { exact: true }).selectOption('yyyy-MM-dd');
   await expect(dates.getByText(/2026-11-23/)).toBeVisible();
 
-  const appearance = page.locator('section.settings-section').filter({
-    has: page.getByRole('heading', { name: 'Darstellung', exact: true }),
+  await page.getByLabel('Sprache der Oberfläche', { exact: true }).selectOption('en');
+  await page.getByLabel('Darstellung', { exact: true }).selectOption('Dark');
+  const [saved] = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().endsWith('/api/v1/settings') && response.request().method() === 'PUT',
+    ),
+    toolbar.getByRole('button', { name: 'Speichern', exact: true }).click(),
+  ]);
+  expect(saved.ok()).toBe(true);
+  expect(saved.request().postDataJSON()).toMatchObject({
+    shortDateFormat: 'yyyy-MM-dd',
+    theme: 'Dark',
+    language: 'en',
   });
-  const appearanceForm = await appearance.locator('form').getAttribute('id');
-  const saveAppearance = () => page.locator(`button[form="${appearanceForm}"]`).click();
-  await appearance.getByLabel('Darstellung', { exact: true }).selectOption('Dark');
-  await saveAppearance();
+  await expect(toolbar.getByRole('button', { name: 'No changes' })).toBeDisabled();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await appearance.getByLabel('Darstellung', { exact: true }).selectOption('Light');
-  await saveAppearance();
+  await page.getByLabel('Appearance', { exact: true }).selectOption('Light');
+  await toolbar.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.emulateMedia({ colorScheme: 'dark' });
-  await appearance.getByLabel('Darstellung', { exact: true }).selectOption('Auto');
-  await saveAppearance();
+  await page.getByLabel('Appearance', { exact: true }).selectOption('Auto');
+  await toolbar.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');

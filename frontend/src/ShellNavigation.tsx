@@ -6,7 +6,7 @@ import { useSettingsSections } from './settings-sections';
 import { Button } from './ui';
 import type { ReactNode } from 'react';
 
-function CollectionSearch() {
+function HeaderSearch() {
     const { t } = useLocale();
     const { pathname } = useLocation();
     const [params, setParams] = useSearchParams();
@@ -33,13 +33,13 @@ function CollectionSearch() {
                 }
             }}
         >
-            <button type="submit" aria-label={t('Sammlung durchsuchen', 'Search collection')}>
+            <button type="submit" aria-label={t('Suchen', 'Search')}>
                 <Search size={17} />
             </button>
             <input
                 type="search"
                 aria-label={t('Spiele suchen', 'Search games')}
-                placeholder={t('Sammlung durchsuchen …', 'Search collection…')}
+                placeholder={t('Suchen …', 'Search…')}
                 value={search}
                 onChange={(event) =>
                     inLibrary ? updateLibraryQuery(event.target.value) : setDraft(event.target.value)
@@ -52,23 +52,18 @@ function CollectionSearch() {
 export function ShellHeader({
     brand,
     languageSwitch,
-    connected,
     menuOpen,
     openMenu,
     signOut,
 }: {
     brand: ReactNode;
     languageSwitch: ReactNode;
-    connected: boolean;
     menuOpen: boolean;
     openMenu: () => void;
     signOut: () => void;
 }) {
     const { t } = useLocale();
     const { pathname } = useLocation();
-    const connection = connected
-        ? t('Live verbunden', 'Live connected')
-        : t('Verbindung wird aufgebaut', 'Connecting');
     return (
         <header className="shell-header" inert={menuOpen}>
             <div className="header-identity">
@@ -85,12 +80,8 @@ export function ShellHeader({
                     {brand}
                 </Link>
             </div>
-            <CollectionSearch key={pathname} />
+            <HeaderSearch key={pathname} />
             <div className="header-tools">
-                <span className="live-state" title={connection}>
-                    <span className={`live-dot ${connected ? 'connected' : ''}`} />
-                    <span className="connection-label">{connection}</span>
-                </span>
                 <button
                     className="account-toggle"
                     type="button"

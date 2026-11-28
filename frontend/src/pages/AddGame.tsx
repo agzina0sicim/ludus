@@ -18,7 +18,7 @@ export default function AddGamePage() {
     const [provider, setProvider] = useState('');
     const [search, setSearch] = useState('');
     const term = useDebounce(search);
-    const [selected, setSelected] = useState<Metadata | 'manual'>();
+    const [selected, setSelected] = useState<Metadata>();
     const [title, setTitle] = useState('');
     const [root, setRoot] = useState('');
     const [profile, setProfile] = useState('');
@@ -31,9 +31,9 @@ export default function AddGamePage() {
             ? `metadata/search?${query({ query: term.trim(), platformId: platform, provider })}`
             : null,
     );
-    function choose(item: Metadata | 'manual') {
+    function choose(item: Metadata) {
         setSelected(item);
-        setTitle(item === 'manual' ? search : item.title);
+        setTitle(item.title);
         setError(undefined);
     }
     const rootId = root || String(roots.data?.[0]?.id ?? '');
@@ -80,14 +80,6 @@ export default function AddGamePage() {
                         <option value="ScreenScraper">ScreenScraper.fr</option>
                     </select>
                 </Field>
-            </div>
-            <div className="add-actions">
-                <Button disabled={!platform} onClick={() => choose('manual')}>
-                    <Plus size={17} />
-                    {t('Manuell hinzufügen', 'Add manually')}
-                </Button>
-
-                <Link to="/settings/metadata">{t('Metadaten konfigurieren', 'Configure metadata')}</Link>
             </div>
             <ErrorBox
                 error={results.error || platforms.error || roots.error || profiles.error}
@@ -143,15 +135,13 @@ export default function AddGamePage() {
                     title={t('Zur Bibliothek hinzufügen', 'Add to library')}
                     onClose={() => setSelected(undefined)}
                     busy={busy}
-                    wide={selected !== 'manual'}
+                    wide
                 >
-                    <div className={selected === 'manual' ? undefined : 'add-confirmation'}>
-                        {selected !== 'manual' && (
-                            <div>
-                                <Cover path={selected.coverRelativePath} title={selected.title} />
-                                <p className="muted">{selected.description}</p>
-                            </div>
-                        )}
+                    <div className="add-confirmation">
+                        <div>
+                            <Cover path={selected.coverRelativePath} title={selected.title} />
+                            <p className="muted">{selected.description}</p>
+                        </div>
                         <form
                             onSubmit={async (event) => {
                                 event.preventDefault();
@@ -166,12 +156,8 @@ export default function AddGamePage() {
                                             rootFolderId: Number(rootId),
                                             qualityProfileId: Number(profileId),
                                             monitored,
-                                            ...(selected === 'manual'
-                                                ? {}
-                                                : {
-                                                      provider: selected.provider,
-                                                      externalId: selected.externalId,
-                                                  }),
+                                            provider: selected.provider,
+                                            externalId: selected.externalId,
                                             baseTitleId: baseTitleId || null,
                                         },
                                     });

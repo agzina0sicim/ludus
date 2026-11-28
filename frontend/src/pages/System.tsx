@@ -279,12 +279,6 @@ function Backups() {
             <div className="view-toolbar">
                 <div>
                     <h2>{t('Sicherungen', 'Backups')}</h2>
-                    <p className="muted">
-                        {t(
-                            'Sichert Datenbank, Konfiguration und Schlüssel. ROM-Dateien sind nicht enthalten.',
-                            'Backs up the database, configuration, and keys. ROM files are not included.',
-                        )}
-                    </p>
                 </div>
                 <Action
                     variant="primary"

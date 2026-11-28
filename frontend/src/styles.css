@@ -548,25 +548,6 @@
     font-weight: 600;
     padding: 6px 10px;
   }
-  .live-state {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #99a3ad;
-    font-size: 14px;
-  }
-  .live-dot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #dfa04b;
-    flex-shrink: 0;
-  }
-  .live-dot.connected {
-    background: #79c5a0;
-    box-shadow: 0 0 0 3px #79c5a011;
-  }
   .main-content {
     min-width: 0;
     min-height: 0;
@@ -1302,8 +1283,7 @@
     gap: 6px;
     padding: 0;
   }
-  .header-brand .brand strong,
-  .header-tools .connection-label {
+  .header-brand .brand strong {
     display: none;
   }
   .header-tools {
@@ -1595,16 +1575,6 @@
 .add-search .search-input {
   width: 100%;
 }
-.add-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 0;
-  border-bottom: 1px solid #494949;
-  font-size: 14px;
-}
 .metadata-card > div:last-child {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1841,9 +1811,6 @@
   padding: 21px 10px 10px;
   align-items: start;
 }
-.provider-hint {
-  font-size: 13px;
-}
 .provider-card,
 .provider-add {
   background: #333;
@@ -1999,9 +1966,6 @@
   }
   .game-facts {
     gap: 6px 12px;
-  }
-  .add-actions a {
-    padding: 4px 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
